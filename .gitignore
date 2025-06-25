@@ -1,0 +1,4 @@
+gassmann_env/*
+*.npy
+src/example/samples/*
+*.pyc
