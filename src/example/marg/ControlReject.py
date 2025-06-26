@@ -1,6 +1,12 @@
 from sklearn.neighbors import KernelDensity
 import numpy as np
 import torch
+import os
+import sys
+current_dir = os.path.dirname(__file__)
+
+src_path = os.path.abspath(os.path.join(current_dir, '../..'))
+sys.path.append(src_path)
 from utilities.Gassmann import simulator_prob_n, simulator_det, sample_nuis_parameters_numpy
 from utilities.Histogram2d import pairplot
 from sklearn.neighbors import KernelDensity
@@ -187,14 +193,14 @@ def rejection_filter(m_samples, kde_bw=0.5, M=2000):
 
 if __name__ == "__main__":
     # load your MCMC draws
-    X = np.load("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/mcmc_samples_prob.npy")
-    filtered_X, scores, threshold = rejection_filter(X[:,:2], kde_bw=1.5, M=10000)
+    X = np.load("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/marg/mcmc_samples_prob.npy")
+    filtered_X, scores, threshold = rejection_filter(X[:,:], kde_bw=1.5, M=100)
     print(f"Kept {filtered_X.shape[0]} / {X.shape[0]} samples (threshold={threshold:.3f})")
     m_true=torch.tensor([4, 7])
-    np.save("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/control_mc.npy", filtered_X)
+    np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/marg/control_mc.npy", filtered_X)
 
-    save_path = "/home/users/scro4690/Documents/GenInv/SBIcompare/src/plotting/figures/Gassmann/mcmc_control.png"
-    pairplot(filtered_X, m_true.detach().numpy(), fontsize=15, save_path=save_path)
+    save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/marg/results/mcmc_control.png"
+    pairplot(filtered_X, m_true.detach().cpu().numpy(), fontsize=15, save_path=save_path)
 
 
 

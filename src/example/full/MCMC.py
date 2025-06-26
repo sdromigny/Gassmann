@@ -47,13 +47,13 @@ model = FullMCMC(x_obs, sigma)
 mcmc = pints.MCMCController(model, nchains, xs, method=pints.MetropolisRandomWalkMCMC)
 
 # Add stopping criterion
-mcmc.set_max_iterations(500000)
+mcmc.set_max_iterations(5000000)
 
 # Run the MCMC sampling
 chains = mcmc.run()
 
 # Define the burn-in period
-burn_in = 1000  # Adjust this value based on your needs
+burn_in = 5000  # Adjust this value based on your needs
 thin=10
 # Discard the first `burn_in` samples for all chains
 chains = chains[:, burn_in:, :]  # Keep samples after burn-in

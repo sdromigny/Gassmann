@@ -125,7 +125,7 @@ nfm = Linear(dim=dim, kernel='fullrank').to(device)
 
 
 # Training config
-num_epochs = 5000
+num_epochs = 1000
 batch_size = 50
 sigma = 0.01
 observed_data = torch.tensor([0.64704126, 0.61732611], device=device)

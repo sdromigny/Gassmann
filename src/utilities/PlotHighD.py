@@ -183,3 +183,4 @@ def plot_5d_corner(samples, fontsize=20,
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
     plt.show()
+    return fig

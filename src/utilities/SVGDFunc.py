@@ -189,7 +189,7 @@ class SVGDGassmannProb:
 
         # 3) Simulate d_pred = f(θ, m)
         #    Expect shape (n_particles, n_data)
-        d_pred = simulator_prob(theta_torch)
+        d_pred,n = simulator_prob(theta_torch)
 
         # 4) Log-likelihood:  -0.5 * Σ_j [ (d_obs[j] − d_pred[j]) / σ ]²
         diff = (self.d_obs_torch.unsqueeze(0) - d_pred) / self.sigma_torch
@@ -585,49 +585,44 @@ class FullsSVGD:
         """
         Returns ∇_θ log p(θ | d_obs) for each θ‐particle in `theta_np`.
         """
-        theta = torch.tensor(theta_np, 
-                             dtype=torch.float32, 
-                             device=self.device, 
-                             requires_grad=True)
+        theta = torch.tensor(theta_np,
+                            dtype=torch.float32,
+                            device=self.device,
+                            requires_grad=True)  # (N,D)
 
-        N, D = theta.shape        # N particles, D total parameters
-        # 1) Simulate model
-        d_pred = simulator_full5(theta)     # → (N, len(d_obs))
+        # 2) simulate forward
+        d_pred = simulator_full5(theta)  # -> (N, len(d_obs))
 
-        # 2) Gaussian likelihood: log p(d_obs | θ)
-        #    shape broadcasting to (N, len(d_obs))
+        # 3) log‐likelihood
         diff = (self.d_obs_torch.unsqueeze(0) - d_pred) / self.sigma_torch
         log_like = -0.5 * torch.sum(diff**2, dim=1)  # (N,)
 
-        # 3) Uniform(0,10) prior on ALL θ
-        in_bounds = ((theta >= 0.0) & (theta <= 10.0)).all(dim=1)
-        log_prior_unif = torch.where(
-            in_bounds,
-            torch.zeros(N, device=self.device),
-            torch.full((N,), float("-inf"), device=self.device)
-        )
+        # 4) uniform prior on first two dims
+        in_bounds = ((theta[:, :2] >= 0.0) & (theta[:, :2] <= 10.0)).all(dim=1)
+        log_prior_unif = torch.where(in_bounds,
+                                    torch.zeros_like(log_like),
+                                    torch.full_like(log_like, float("-inf")))
 
-        # 4) Gaussian priors on the last 3 components of θ
-        latent = theta[:, -3:]   # (N,3)
+        # 5) Gaussian prior on last three
+        latent = theta[:, -3:]
         diff_latent = (latent - self.latent_mu) / self.latent_sd
         log_prior_latent = -0.5 * torch.sum(diff_latent**2, dim=1)  # (N,)
 
-        # 5) Combine into log-posterior
+        # 6) total log‐posterior
         log_post = log_like + log_prior_unif + log_prior_latent  # (N,)
 
-        # 6) Compute ∇_θ log-posteriors via autograd
-        grads = []
-        for i in range(N):
-            # zero grads
-            if theta.grad is not None:
-                theta.grad.zero_()
-            # score for particle i
-            log_post[i].backward(retain_graph=True)
-            grads.append(theta.grad[i].cpu().numpy())
+        # 7) **one** autograd call for the **full** Jacobian:
+        #    grad_outputs[i] picks out d log_post[i]/d theta so we get an (N,D) tensor back.
+        grads = torch.autograd.grad(
+            outputs    = log_post,
+            inputs     = theta,
+            grad_outputs=torch.ones_like(log_post),
+            create_graph=False,
+            retain_graph=False
+        )[0]  # a (N,D) tensor
 
-        return np.stack(grads, axis=0)  # → (N, D)
+        return grads.cpu().numpy()
     
-
     def svgd_kernel(self, theta: np.ndarray, h: float = -1) -> Tuple[np.ndarray, np.ndarray]:
         """
         Standard RBF kernel + its ∇ w.r.t. θ.
