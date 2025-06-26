@@ -592,7 +592,7 @@ class FullsSVGD:
 
         N, D = theta.shape        # N particles, D total parameters
         # 1) Simulate model
-        d_pred = simulator_full(theta)     # → (N, len(d_obs))
+        d_pred = simulator_full5(theta)     # → (N, len(d_obs))
 
         # 2) Gaussian likelihood: log p(d_obs | θ)
         #    shape broadcasting to (N, len(d_obs))
@@ -627,7 +627,7 @@ class FullsSVGD:
 
         return np.stack(grads, axis=0)  # → (N, D)
     
-    
+
     def svgd_kernel(self, theta: np.ndarray, h: float = -1) -> Tuple[np.ndarray, np.ndarray]:
         """
         Standard RBF kernel + its ∇ w.r.t. θ.

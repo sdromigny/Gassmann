@@ -2,9 +2,9 @@ import torch
 import os
 import sys
 
-# Add the 'src/' directory to Python path
 current_dir = os.path.dirname(__file__)
-src_path = os.path.abspath(os.path.join(current_dir, '../../..'))
+
+src_path = os.path.abspath(os.path.join(current_dir, '../..'))
 sys.path.append(src_path)
 import math
 import matplotlib.pyplot as plt
@@ -96,7 +96,7 @@ plt.xlabel("Iterations")
 plt.ylabel("Loss")
 plt.title("Training Loss for VI Normalising Flows")
 
-save_path = "/home/users/scro4690/Documents/GenInv/SBIcompare/src/plotting/figures/Gassmann/nf_prob_1.png"
+save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/marg/results/nf_prob.png"
 
 
 # Sampling and plotting
@@ -105,7 +105,7 @@ a, b = 0.0, 10.0   # or your actual domain bounds
 theta_samples = unconstrained_to_constrained(z, a, b)  # shape (N, dim)
 m_true = torch.tensor([4, 7])
 
-np.save("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/nf_samples_prob.npy",z.detach().cpu().numpy())
+np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/marg/prob/nf_samples.npy",z.detach().cpu().numpy())
 
 pairplot(theta_samples.detach().cpu().numpy(), m_true.detach().cpu().numpy(), fontsize=15, save_path=save_path)
 
@@ -177,7 +177,7 @@ plt.xlabel("Iterations")
 plt.ylabel("Loss")
 plt.title("Training Loss for VI Normalising Flows")
 
-save_path = "/home/users/scro4690/Documents/GenInv/SBIcompare/src/plotting/figures/Gassmann/nf_det_1.png"
+save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/marg/results/nf_det.png"
 
 
 # Sampling and plotting
@@ -186,6 +186,6 @@ a, b = 0.0, 10.0   # or your actual domain bounds
 theta_samples = unconstrained_to_constrained(z, a, b)  # shape (N, dim)
 m_true = torch.tensor([4, 7])
 
-np.save("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/nf_samples_det.npy",z.detach().cpu().numpy())
+np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/marg/det/nf_samples.npy",z.detach().cpu().numpy())
 
 pairplot(theta_samples.detach().cpu().numpy(), m_true.detach().cpu().numpy(), fontsize=15, save_path=save_path)

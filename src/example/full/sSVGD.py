@@ -12,7 +12,7 @@ sys.path.append(src_path)
 import numpy as np
 import torch
 from utilities.SVGDFunc import FullsSVGD
-from utilities.Plot8D import plot_marginals_and_pairs
+from utilities.PlotHighD import *
 
 
 # 1) Define observed data and noise
@@ -29,17 +29,19 @@ n_theta=5
 xs = []
 for _ in range(num_particles):
     main_params = np.random.uniform(0, 10, size=len(x_obs))
-    latent_param1 = np.random.normal(8.5, 0.3,size=len(x_obs))
-    latent_param2=np.random.normal(0.37, 0.02,size=len(x_obs))
-    latent_param3=np.random.normal(44.8, 0.8,size=len(x_obs))   # Rho_grain
-    xs.append(np.concatenate([main_params, latent_param1, latent_param2, latent_param3]))
+    latent_params = np.array([
+        np.random.normal(8.5, 0.3),  # G_frame
+        np.random.normal(0.37, 0.02),  # Porosity
+        np.random.normal(44.8, 0.8)   # Rho_grain
+    ])
+    xs.append(np.concatenate([main_params, latent_params]))
 xs = np.array(xs)
 
 # 4) Instantiate SVGD sampler
 svgd = FullsSVGD(d_obs=x_obs, sigma=sigma, device=device)
 
 # 5) Run SVGD
-n_iter  = 10000
+n_iter  = 100000
 step_sz = 1e-3
 bandw   = -1   # median trick
 alpha   = 0.9
@@ -58,8 +60,8 @@ print("particle_history.shape:", particle_history.shape)
 # → (n_iter+1, num_particles, n_theta)
 
 # 6) Discard burn‐in and flatten
-burn_in = 100
-thin=1
+burn_in = 1000
+thin=10
 chains = particle_history[burn_in:, :, :]  # shape = (n_iter+1 - burn_in, num_particles, n_theta)
 
 chains_thinned = chains[::thin, :, :] 
@@ -81,4 +83,4 @@ np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/full
 
 print(samples.shape)
 
-plot_marginals_and_pairs(samples, save_path=save_path)
+plot_5d_corner(samples, save_path=save_path)

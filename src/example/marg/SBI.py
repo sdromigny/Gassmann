@@ -2,9 +2,9 @@ import torch
 import os
 import sys
 
-# Add the 'src/' directory to Python path
 current_dir = os.path.dirname(__file__)
-src_path = os.path.abspath(os.path.join(current_dir, '../../..'))
+
+src_path = os.path.abspath(os.path.join(current_dir, '../..'))
 sys.path.append(src_path)
 
 
@@ -153,8 +153,8 @@ for it in tqdm(range(num_epochs)):
     x1_dist = torch.distributions.Uniform(0.01, 10.0)
     x1 = x1_dist.sample((batch_size, dim)).to(device)
 
-    x0 = simulator(x1).to(device)
-
+    x0,_ = simulator(x1)
+    x0=x0.to(device)
     loss = estimator.loss(x1, x0).mean()
 
     loss.backward()
@@ -193,7 +193,7 @@ samples_np = samples.cpu().numpy()
 #np.save("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/fmpe_samples_prob.npy",samples_np)
 m_true = torch.tensor([4, 7]).numpy()
 
-save_path = "/home/users/scro4690/Documents/GenInv/SBIcompare/src/plotting/figures/Gassmann/fm_prob_test.png"
+save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/marg/results/fm_prob.png"
 pairplot(samples_np, m_true, fontsize=15, save_path=save_path)
 
 
@@ -295,5 +295,5 @@ samples_np = samples.cpu().numpy()
 #np.save("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/fmpe_samples_det.npy",samples_np)
 m_true = torch.tensor([4, 7]).numpy()
 
-save_path = "/home/users/scro4690/Documents/GenInv/SBIcompare/src/plotting/figures/Gassmann/fm_det_test.png"
+save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/marg/results/fm_det.png"
 pairplot(samples_np, m_true, fontsize=15, save_path=save_path)

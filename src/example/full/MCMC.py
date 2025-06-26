@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 
 from utilities.MCMCFunc import FullMCMC
 from utilities.Gassmann import simulator_prob, simulator_det, sample_nuis_parameters_numpy
-from utilities.Plot8D import plot_marginals_and_pairs
+from utilities.PlotHighD import plot_5d_corner
 
 # Initialise the chains
 nchains = 10  # Total number of chains
@@ -28,15 +28,17 @@ x_obs = np.array([0.64704126, 0.61732611])
 xs = []
 for _ in range(nchains):
     main_params = np.random.uniform(0, 10, size=len(x_obs))
-    latent_param1 = np.random.normal(8.5, 0.3,size=len(x_obs))
-    latent_param2=np.random.normal(0.37, 0.02,size=len(x_obs))
-    latent_param3=np.random.normal(44.8, 0.8,size=len(x_obs))   # Rho_grain
-    xs.append(np.concatenate([main_params, latent_param1, latent_param2, latent_param3]))
+    latent_params = np.array([
+        np.random.normal(8.5, 0.3),  # G_frame
+        np.random.normal(0.37, 0.02),  # Porosity
+        np.random.normal(44.8, 0.8)   # Rho_grain
+    ])
+    xs.append(np.concatenate([main_params, latent_params]))
 xs = np.array(xs)
 
 # Properties of the observed data
 sigma = 0.01
-x_obs = np.array([0.64704126, 0.61732611])
+
 
 # Initialize the class
 model = FullMCMC(x_obs, sigma)
@@ -45,25 +47,27 @@ model = FullMCMC(x_obs, sigma)
 mcmc = pints.MCMCController(model, nchains, xs, method=pints.MetropolisRandomWalkMCMC)
 
 # Add stopping criterion
-mcmc.set_max_iterations(1000000)
+mcmc.set_max_iterations(500000)
 
 # Run the MCMC sampling
 chains = mcmc.run()
 
 # Define the burn-in period
-burn_in = 10000  # Adjust this value based on your needs
-
+burn_in = 1000  # Adjust this value based on your needs
+thin=10
 # Discard the first `burn_in` samples for all chains
 chains = chains[:, burn_in:, :]  # Keep samples after burn-in
 
-save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/full/results/mcmc1.png"
+chains_thinned = chains[:, ::thin, :] 
 
-m_true=torch.tensor([4, 7])
+save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/full/results/mcmc.png"
 
-samples=np.vstack(chains)
 
-np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/full/mcmc_samples1.npy",samples)
+
+samples=np.vstack(chains_thinned)
+
+np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/full/mcmc_samples.npy",samples)
 
 print(samples.shape)
 
-plot_marginals_and_pairs(samples, save_path=save_path)
+plot_5d_corner(samples, save_path=save_path)

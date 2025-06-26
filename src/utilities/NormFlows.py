@@ -1,6 +1,10 @@
 import torch
 import normflows as nf
 import torch.nn as nn
+import torch.nn.functional as F
+import torch.distributions.transforms as T
+from typing import List
+
 
 def unconstrained_to_constrained(w: torch.Tensor, a: float, b: float) -> torch.Tensor:
     """
@@ -11,6 +15,33 @@ def unconstrained_to_constrained(w: torch.Tensor, a: float, b: float) -> torch.T
     """
     sig = torch.sigmoid(w)
     return a + (b - a) * sig
+
+
+def unconstrained_to_constrained_5d(z: torch.Tensor,
+                                    u_lo: float, u_hi: float,
+                                    gauss_means: List[float],
+                                    gauss_stds:  List[float]) -> torch.Tensor:
+    """
+    z: (N,5) unconstrained latent samples
+    u_lo, u_hi: bounds for the first two dims (Uniform[u_lo,u_hi])
+    gauss_means: length-3 list of means for dims [2,3,4]
+    gauss_stds:  length-3 list of stds   for dims [2,3,4]
+    Returns θ: (N,5) with:
+      θ[:,0:2] in [u_lo,u_hi]  via sigmoid→scale
+      θ[:,2:5] ∼ N(mean,std), via affine
+    """
+    # 1) Uniform( u_lo, u_hi ) for dims 0,1
+    sig = torch.sigmoid(z[:, :2])                       # (N,2) in (0,1)
+    theta_u = u_lo + (u_hi - u_lo) * sig                # (N,2) in (u_lo,u_hi)
+
+    # 2) Gaussian means+stds for dims 2,3,4
+    means = z.new_tensor(gauss_means).view(1, -1)        # (1,3)
+    stds  = z.new_tensor(gauss_stds).view(1, -1)         # (1,3)
+    theta_g = z[:, 2:] * stds + means                   # (N,3)
+
+    # 3) concatenate back to (N,5)
+    return torch.cat([theta_u, theta_g], dim=1)
+
 
 def transform_to_theta(w):
     # w: (batch, dim)
@@ -30,6 +61,43 @@ def log_det_transform(z, low=0.0, high=1.0):
     )
 
     return w, torch.sum(log_det_jac, dim=1)
+
+
+
+def batch_constrained_transform(w):
+    """
+    w: (batch_size, 5)   latent from N(0,1)
+    returns:
+      theta: (batch_size, 5)  in mixed constrained space
+      log_det: (batch_size,)  log |det d w→θ|
+    """
+    batch_size = w.shape[0]
+    device = w.device
+
+    # 1) Uniform[0,10] for dims 0,1
+    sigmoid = T.SigmoidTransform()  # maps ℝ → (0,1)
+    u = sigmoid(w[:, :2])           # shape (batch,2)
+    theta_u = u * 10.0              # shape (batch,2)
+    # log-det from sigmoid:
+    ld_sig = sigmoid.log_abs_det_jacobian(w[:, :2], u).sum(dim=1)
+    # extra log-det from multiplying by 10:
+    ld_scale_u = 2 * torch.log(torch.tensor(10.0, device=device))
+
+    # 2) Gaussian transforms for dims 2,3,4
+    means = torch.tensor([8.5, 0.37, 44.8], device=device)
+    stds  = torch.tensor([0.3, 0.02, 0.8], device=device)
+    w_sub = w[:, 2:]                # shape (batch,3)
+    theta_g = w_sub * stds + means  # shape (batch,3)
+    # log-det of affine = sum(log stds) for each sample
+    ld_scale_g = torch.sum(torch.log(stds))
+    ld_g = ld_scale_g.repeat(batch_size)
+
+    # assemble θ and log_det
+    theta = torch.cat([theta_u, theta_g], dim=1)
+    log_det = ld_sig + ld_scale_u + ld_g
+
+    return theta, log_det
+
 
 class NormFlow(nn.Module):
     def __init__(self, config):

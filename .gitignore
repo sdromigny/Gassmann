@@ -2,3 +2,5 @@ gassmann_env/*
 *.npy
 src/example/samples/*
 *.pyc
+*.log
+sbi-logs/*

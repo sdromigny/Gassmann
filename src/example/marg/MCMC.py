@@ -5,7 +5,8 @@ import sys
 
 # Add the 'src/' directory to Python path
 current_dir = os.path.dirname(__file__)
-src_path = os.path.abspath(os.path.join(current_dir, '../../..'))
+
+src_path = os.path.abspath(os.path.join(current_dir, '../..'))
 sys.path.append(src_path)
 
 
@@ -46,20 +47,20 @@ mcmc.set_max_iterations(1000000)
 chains = mcmc.run()
 
 # Define the burn-in period
-burn_in = 1000  # Adjust this value based on your needs
+burn_in = 1000# Adjust this value based on your needs
 
 # Discard the first `burn_in` samples for all chains
 chains = chains[:, burn_in:, :]  # Keep samples after burn-in
 
 
 
-save_path = "/home/users/scro4690/Documents/GenInv/SBIcompare/src/plotting/figures/Gassmann/mcmc_prob.png"
+save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/marg/results/mcmc_prob.png"
 
 m_true=torch.tensor([4, 7])
 
 samples=np.vstack(chains)
 
-np.save("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/mcmc_samples_prob.npy",samples)
+np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/marg/mcmc_samples_prob.npy",samples)
 
 print(samples.shape)
 
@@ -67,7 +68,7 @@ pairplot(samples, m_true.detach().numpy(), fontsize=15, save_path=save_path)
 
 ########################################################################################################
 
-# Initialise the chains
+# # Initialise the chains
 nchains = 10 # total number of chains
 xs = [[1, 5]] * nchains # initial positions for all chains
 
@@ -96,13 +97,13 @@ burn_in = 1000  # Adjust this value based on your needs
 # Discard the first `burn_in` samples for all chains
 chains = chains[:, burn_in:, :]  # Keep samples after burn-in
 
-save_path = "/home/users/scro4690/Documents/GenInv/SBIcompare/src/plotting/figures/Gassmann/mcmc_det.png"
+save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/marg/results/mcmc_det.png"
 
 m_true=torch.tensor([4, 7])
 
 samples=np.vstack(chains)
 
-np.save("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/mcmc_samples_det.npy",samples)
+np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/marg/mcmc_samples_det.npy",samples)
 
 print(samples.shape)
 
