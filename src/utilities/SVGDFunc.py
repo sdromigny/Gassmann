@@ -354,15 +354,10 @@ class sSVGDGassmannProb:
             torch.zeros(n_particles, device=self.device),
             torch.full((n_particles,), float("-inf"), device=self.device),
         )
-
-        # 5) Gaussian priors on m: G_frame∼N(8.5,0.3), poro∼N(0.37,0.02), rho_grain∼N(44.8,0.8)
-        mu    = torch.tensor([8.5, 0.37, 44.8], device=self.device)
-        sd    = torch.tensor([0.3, 0.02, 0.8], device=self.device)
-        diff_m = (n - mu) / sd                                      # (n_particles, 3)
-        log_prior_m = -0.5 * torch.sum(diff_m * diff_m, dim=1)            # (n_particles,)
+        log_prior_n=sample_and_log_gaussians(n)
 
         # 6) Combine log-posteriors
-        log_post = log_likelihood + log_prior_theta + log_prior_m        # (n_particles,)
+        log_post = log_likelihood + log_prior_theta + log_prior_n      # (n_particles,)
 
         # 7) Compute ∇_θ log-posteriors via PyTorch autograd
         grads = []

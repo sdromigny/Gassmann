@@ -41,7 +41,7 @@ xs = np.array(xs)
 svgd = FullsSVGD(d_obs=x_obs, sigma=sigma, device=device)
 
 # 5) Run SVGD
-n_iter  = 5000000
+n_iter  = 10000000
 step_sz = 1e-3
 bandw   = -1   # median trick
 alpha   = 0.9
@@ -60,7 +60,7 @@ print("particle_history.shape:", particle_history.shape)
 # → (n_iter+1, num_particles, n_theta)
 
 # 6) Discard burn‐in and flatten
-burn_in = 5000
+burn_in = 10000
 thin=10
 chains = particle_history[burn_in:, :, :]  # shape = (n_iter+1 - burn_in, num_particles, n_theta)
 

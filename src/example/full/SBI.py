@@ -66,10 +66,11 @@ num_dim = 5# Define the prior
 x_obs = torch.tensor([0.64704126, 0.61732611])  # Provided observed data
 
 # Sample from the prior and simulate
-num_simulations = 10000
+num_simulations = 5000
 # 1) Uniform[0,10] on θ₀ and θ₁
 low_u  = torch.tensor([0.0, 0.0])
 high_u = torch.tensor([10.0, 10.0])
+uniform1 = BoxUniform(low=low_u, high=high_u)
 uniform2 = BoxUniform(low=low_u, high=high_u)
 
 # 2) Joint Gaussian on θ₂,θ₃,θ₄ with your means & stds
@@ -90,11 +91,14 @@ print(x)
 
 # generate our observation
 
-trainer = FMPE(prior)
+trainer = NPE(prior)
 trainer.append_simulations(theta, x).train()
 posterior = trainer.build_posterior()
 
-samples = posterior.sample((100000,), x=x_obs)
+num_samples=100000
+data_dim=2
+xs=x_obs + 0.01 * torch.randn(1000, data_dim)
+samples = posterior.sample_batched((num_samples,), x=xs)
 
 
 save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/full/results/sbi_fmpe.png"

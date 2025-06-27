@@ -194,7 +194,7 @@ def rejection_filter(m_samples, kde_bw=0.5, M=2000):
 if __name__ == "__main__":
     # load your MCMC draws
     X = np.load("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/marg/mcmc_samples_prob.npy")
-    filtered_X, scores, threshold = rejection_filter(X[:,:], kde_bw=1.5, M=100)
+    filtered_X, scores, threshold = rejection_filter(X[:,:], kde_bw=1.5, M=10000)
     print(f"Kept {filtered_X.shape[0]} / {X.shape[0]} samples (threshold={threshold:.3f})")
     m_true=torch.tensor([4, 7])
     np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/marg/control_mc.npy", filtered_X)
