@@ -61,12 +61,29 @@ from utilities.MLP import SimpleVectorFieldNet
 
 from utilities.FlowMatchingEstimator import FlowMatchingEstimator
 
+# 1) Pick a seed:
+SEED = 1234
+
+# 2) Python built-in RNG
+random.seed(SEED)
+
+# 3) NumPy RNG
+np.random.seed(SEED)
+
+# 4) PyTorch RNG (both CPU and CUDA)
+torch.manual_seed(SEED)
+torch.cuda.manual_seed_all(SEED)
+
+# 5) CUDNN backend settings for determinism (may slow you down slightly)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 num_dim = 5# Define the prior
 
 x_obs = torch.tensor([0.64704126, 0.61732611])  # Provided observed data
 
 # Sample from the prior and simulate
-num_simulations = 5000
+num_simulations = 4000
 # 1) Uniform[0,10] on θ₀ and θ₁
 low_u  = torch.tensor([0.0, 0.0])
 high_u = torch.tensor([10.0, 10.0])
@@ -86,7 +103,7 @@ prior = MultipleIndependent([uniform2, gauss3])
 theta = prior.sample((num_simulations,))
 
 x = simulator_full5(theta)
-print(x)
+
 
 
 # generate our observation
@@ -97,120 +114,120 @@ posterior = trainer.build_posterior()
 
 num_samples=100000
 data_dim=2
-xs=x_obs + 0.01 * torch.randn(1000, data_dim)
+xs=x_obs + 0.01 * torch.randn(100, data_dim)
 samples = posterior.sample_batched((num_samples,), x=xs)
 
+samples_2d = samples.reshape(-1, samples.shape[-1])
+save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/full/results/sbi.png"
 
-save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/full/results/sbi_fmpe.png"
-
-
-plot_5d_corner(samples, save_path=save_path)
+np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/full/sbi.npy",samples_2d)
+plot_5d_corner(samples_2d, save_path=save_path)
 
 ########################################################################################################################
 
 
-# Set seeds for reproducibility
-seed = 42
-torch.manual_seed(seed)
-np.random.seed(seed)
-random.seed(seed)
-torch.cuda.manual_seed_all(seed)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
+# # Set seeds for reproducibility
+# seed = 42
+# torch.manual_seed(seed)
+# np.random.seed(seed)
+# random.seed(seed)
+# torch.cuda.manual_seed_all(seed)
+# torch.backends.cudnn.deterministic = True
+# torch.backends.cudnn.benchmark = False
 
-# Device
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# # Device
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Config
-num_epochs = 30000
-batch_size = 200
-input_dim = 5
-output_dim=2
-simulator = simulator_full5  # or simulator_det
-x_obs = torch.tensor([0.64704126, 0.61732611], device=device)
-# Define vector field net and embedding net
-hidden_units = 20
-vector_field_net = SimpleVectorFieldNet(
-    input_dim=input_dim,
-    condition_dim=output_dim,
-    time_encoding_dim=6,
-    hidden_dim=hidden_units
-).to(device)
+# # Config
+# num_epochs = 30000
+# batch_size = 200
+# input_dim = 5
+# output_dim=2
+# simulator = simulator_full5  # or simulator_det
+# x_obs = torch.tensor([0.64704126, 0.61732611], device=device)
+# # Define vector field net and embedding net
+# hidden_units = 20
+# vector_field_net = SimpleVectorFieldNet(
+#     input_dim=input_dim,
+#     condition_dim=output_dim,
+#     time_encoding_dim=6,
+#     hidden_dim=hidden_units
+# ).to(device)
 
-embedding_net = nn.Identity().to(device)
+# embedding_net = nn.Identity().to(device)
 
-# Initialize estimator
-estimator = FlowMatchingEstimator(
-    net=vector_field_net,
-    input_shape=torch.Size([input_dim]),
-    condition_shape=torch.Size([output_dim]),
-    embedding_net=embedding_net,
-).to(device)
+# # Initialize estimator
+# estimator = FlowMatchingEstimator(
+#     net=vector_field_net,
+#     input_shape=torch.Size([input_dim]),
+#     condition_shape=torch.Size([output_dim]),
+#     embedding_net=embedding_net,
+# ).to(device)
 
-# Optimizer
-optimizer = optim.Adam(estimator.parameters(), lr=1e-4)
+# # Optimizer
+# optimizer = optim.Adam(estimator.parameters(), lr=1e-4)
 
-# Loss history
-loss_hist = np.array([])
-best_loss = float('inf')
-best_model_state = None
+# # Loss history
+# loss_hist = np.array([])
+# best_loss = float('inf')
+# best_model_state = None
 
-# Training loop
-for it in tqdm(range(num_epochs)):
-    optimizer.zero_grad()
+# # Training loop
+# for it in tqdm(range(num_epochs)):
+#     optimizer.zero_grad()
 
-    xs = []
-    for _ in range(batch_size):
-        main_params = np.random.uniform(0, 10, size=len(x_obs))
-        latent_params = np.array([
-            np.random.normal(8.5, 0.3),  # G_frame
-            np.random.normal(0.37, 0.02),  # Porosity
-            np.random.normal(44.8, 0.8)   # Rho_grain
-        ])
-        xs.append(np.concatenate([main_params, latent_params]))
-    x1 = torch.tensor(xs, dtype=torch.float32, device=device)
+#     xs = []
+#     for _ in range(batch_size):
+#         main_params = np.random.uniform(0, 10, size=len(x_obs))
+#         latent_params = np.array([
+#             np.random.normal(8.5, 0.3),  # G_frame
+#             np.random.normal(0.37, 0.02),  # Porosity
+#             np.random.normal(44.8, 0.8)   # Rho_grain
+#         ])
+#         xs.append(np.concatenate([main_params, latent_params]))
+#     x1 = torch.tensor(xs, dtype=torch.float32, device=device)
 
-    x0 = simulator(x1).to(device)
+#     x0 = simulator(x1).to(device)
 
-    loss = estimator.loss(x1, x0).mean()
+#     loss = estimator.loss(x1, x0).mean()
 
-    loss.backward()
-    optimizer.step()
+#     loss.backward()
+#     optimizer.step()
 
-    loss_hist = np.append(loss_hist, loss.detach().cpu().numpy())
+#     loss_hist = np.append(loss_hist, loss.detach().cpu().numpy())
 
-# Plot loss
-plt.figure(figsize=(10, 10))
-plt.plot(loss_hist, label='loss')
-plt.xlabel("Iterations")
-plt.ylabel("Loss")
-plt.title("Training Loss")
-plt.show()
+# # Plot loss
+# plt.figure(figsize=(10, 10))
+# plt.plot(loss_hist, label='loss')
+# plt.xlabel("Iterations")
+# plt.ylabel("Loss")
+# plt.title("Training Loss")
+# plt.show()
 
-# Posterior sampling
-num_samples = 100000
-eval_batch_size = 25
-
-
-d_pdf = x_obs + 0.01 * torch.randn(num_samples, output_dim, device=device)
-
-samples = []
-with torch.no_grad():
-    for i in range(0, num_samples, eval_batch_size):
-        batch_d_test = d_pdf[i: i + eval_batch_size]
-        flow = estimator.flow(batch_d_test)
-        batch_samples = flow.sample(torch.Size([batch_d_test.shape[0]])).view(-1, input_dim)
-        samples.append(batch_samples)
-
-samples = torch.cat(samples, dim=0)
-
-# Plot
-samples_np = samples.cpu().numpy()
-
-#np.save("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/fmpe_samples_prob.npy",samples_np)
+# # Posterior sampling
+# num_samples = 100000
+# eval_batch_size = 25
 
 
-save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/full/results/fm.png"
-plot_5d_corner(samples_np,save_path=save_path)
+# d_pdf = x_obs + 0.01 * torch.randn(num_samples, output_dim, device=device)
+
+# samples = []
+# with torch.no_grad():
+#     for i in range(0, num_samples, eval_batch_size):
+#         batch_d_test = d_pdf[i: i + eval_batch_size]
+#         flow = estimator.flow(batch_d_test)
+#         batch_samples = flow.sample(torch.Size([batch_d_test.shape[0]])).view(-1, input_dim)
+#         samples.append(batch_samples)
+
+# samples = torch.cat(samples, dim=0)
+
+# # Plot
+# samples_np = samples.cpu().numpy()
+
+# #np.save("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/fmpe_samples_prob.npy",samples_np)
+
+
+# save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/full/results/fm.png"
+# plot_5d_corner(samples_np,save_path=save_path)
 
 
