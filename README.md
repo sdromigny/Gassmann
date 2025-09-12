@@ -40,7 +40,7 @@ src/
   utilities/
     Gassmann.py         # forward model and simulators
     MCMCFunc.py            # McMC sampling functions
-    SVGDFunc.py            # SVGD and sSVGD smapling functions
+    SVGDFunc.py            # SVGD and sSVGD sampling functions
     Histogram2d.py         # Plotting function for the marginalised inferences
     PlotHighD.py           # Plotting function for the full-dimensional inferences
     FlowMatchingEstimator.py, MLP.py, TrainFlowMatching.py          # Functions to run an alternative SBI algorithm, not based on Normalising Flows, but on Flow matching, which showed good results on the marginalised inference problem 
