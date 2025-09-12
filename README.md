@@ -1,7 +1,7 @@
 
 # Gassmann
 
-A compact example repository that demonstrates several Bayesian inference approaches for a toy geophysical inverse problem based on a Gassmann equation as forward model.
+A compact example repository that demonstrates several Bayesian inference approaches for a toy geophysical inverse problem based on a Gassmann equation as forward function.
 
 ---
 
@@ -14,7 +14,7 @@ This repository provides working examples for solving a 5‑dimensional inversio
 * Variational Inference with Normalising Flows
 * Simulation‑Based Inference (SBI) with Neural Density Estimation (NDE)
 
-The forward model is the Gassmann equation (Gassmann, 1951). The implementation lives in `src/utilities/Gassmann.py` and provides three simulator entry points:
+The forward function is the Gassmann equation (Gassmann, 1951). The implementation lives in `src/utilities/Gassmann.py` and provides three simulator entry points:
 
 * `simulator_det`: deterministic simulator where nuisance parameters are fixed to their MLE values.
 * `simulator_prob`: probabilistic simulator that samples nuisance parameters from their prior distributions.
@@ -38,7 +38,7 @@ Use the *full* examples to solve the full‑dimension problem, or the *marginal*
 ```
 src/
   utilities/
-    Gassmann.py         # forward model and simulators
+    Gassmann.py            # forward functions
     MCMCFunc.py            # McMC sampling functions
     SVGDFunc.py            # SVGD and sSVGD sampling functions
     Histogram2d.py         # Plotting function for the marginalised inferences
