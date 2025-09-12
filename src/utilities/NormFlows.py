@@ -1,7 +1,6 @@
 import torch
 import normflows as nf
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.distributions.transforms as T
 from typing import List
 
@@ -251,7 +250,6 @@ import numpy as np
 class Linear(nn.Module):
     """
     PyTorch implementation for a linear transform: z = u + Lx
-    If this flow is used for ADVI, then the covariance matrix is Σ = L^T L
     """
 
     def __init__(self, dim, kernel='diagonal', trainable=True):

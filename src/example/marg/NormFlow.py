@@ -7,28 +7,17 @@ current_dir = os.path.dirname(__file__)
 src_path = os.path.abspath(os.path.join(current_dir, '../..'))
 sys.path.append(src_path)
 import math
-import matplotlib.pyplot as plt
 import normflows as nf
 from tqdm import tqdm
-import os
-import numpy as np
-from utilities.Gassmann import simulator_prob, simulator_det, sample_nuis_parameters_cuda
+from utilities.Gassmann import simulator_prob, simulator_det, sample_and_log_gaussians
 from utilities.NormFlows import *
-
-
-import wandb
-from pytorch_lightning import Trainer
-from pytorch_lightning.loggers import WandbLogger
 
 #from utils.TrainNormFlow import TrainNormFlow  # Adjust import paths as needed
 from utilities.Histogram2d import pairplot
 import os
-import torch
-import numpy as np
+
 import matplotlib.pyplot as plt
-from tqdm import tqdm
-import normflows as nf  # Assuming you have normflows installed
-from utilities.Gassmann import simulator_prob, sample_and_log_gaussians  # Or simulator_det
+
 
 
 # Device configuration

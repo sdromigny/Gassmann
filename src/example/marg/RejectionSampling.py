@@ -1,5 +1,4 @@
-from sklearn.neighbors import KernelDensity
-import numpy as np
+
 import os
 import sys
 current_dir = os.path.dirname(__file__)
@@ -7,17 +6,12 @@ current_dir = os.path.dirname(__file__)
 src_path = os.path.abspath(os.path.join(current_dir, '../..'))
 sys.path.append(src_path)
 import torch
-from utilities.Gassmann import simulator_prob_n, simulator_det, sample_nuis_parameters_numpy
+from utilities.Gassmann import simulator_prob_n, sample_nuis_parameters_numpy
 from utilities.Histogram2d import pairplot
 from sklearn.neighbors import KernelDensity
 import numpy as np
-import torch
-from utilities.Gassmann import simulator_prob, sample_nuis_parameters_numpy
-import numpy as np
-import torch
-from sklearn.neighbors import KernelDensity
-from utilities.Gassmann import simulator_prob_n  # make sure this takes (theta_torch, n_array)
-from utilities.Gassmann import sample_nuis_parameters_numpy
+
+
 
 # -- observed data and noise scale
 d_obs = np.array([0.64704126, 0.61732611])

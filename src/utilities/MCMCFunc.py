@@ -22,10 +22,10 @@ class MCSamplingGassmannProb(pints.LogPDF):
         # Compute likelihood in torch
         likelihood = -0.5 * torch.sum(((self._d_obs - d_pred) / self._sigma) ** 2)
 
-        # Compute prior (staying in numpy for this)
+        # Compute prior
         prior = self.prior(theta, n)
 
-        # Convert likelihood to NumPy scalar for compatibility with pints
+        # Convert likelihood to NumPy scalar
         return likelihood.item() + prior
 
     def n_parameters(self):
@@ -62,10 +62,10 @@ class MCSamplingGassmannIndepProb(pints.LogPDF):
         # Compute likelihood in torch
         likelihood = -0.5 * torch.sum(((self._d_obs - d_pred) / self._sigma) ** 2)
 
-        # Compute prior (staying in numpy for this)
+        # Compute prior
         prior = self.prior(theta, m)
 
-        # Convert likelihood to NumPy scalar for compatibility with pints
+
         return likelihood.item() + prior
 
     def n_parameters(self):
@@ -78,17 +78,15 @@ class MCSamplingGassmannIndepProb(pints.LogPDF):
             return -np.inf
         main_logp = 0.0
 
-        # Convert m to NumPy so we can index easily
         if torch.is_tensor(m):
             m = m.detach().cpu().numpy()
 
-        # m can be (2,3) for a single eval, or (1,2,3) if batched with batch_size=1:
+
         if m.ndim == 3 and m.shape[0] == 1:
             m = m[0]  # drop the batch dim → (2,3)
         elif m.ndim != 2 or m.shape[1] != 3:
             raise ValueError(f"Unexpected m shape: {m.shape}")
 
-        # Now m[c, 0] = G_frame_c, m[c,1]=poro_c, m[c,2]=rho_grain_c
         mu = [8.5, 0.37, 44.8]
         sigma = [0.3, 0.02, 0.8]
 

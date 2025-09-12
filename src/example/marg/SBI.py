@@ -38,7 +38,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 # Import your training class and any required components
 
-from utilities.Gassmann import simulator_prob, simulator_det, sample_nuis_parameters_numpy
+from utilities.Gassmann import simulator_prob, simulator_det, sample_nuis_parameters_cuda
 from utilities.Histogram2d import pairplot
 
 
@@ -59,44 +59,106 @@ from utilities.MLP import SimpleVectorFieldNet
 
 from utilities.FlowMatchingEstimator import FlowMatchingEstimator
 
-# num_dim = 2# Define the prior
-
-# simulator=simulator_prob
-
-# prior = BoxUniform(low=0.01 * torch.ones(num_dim), high=10 * torch.ones(num_dim))
-
-# # Check prior, return PyTorch prior.
-# prior, num_parameters, prior_returns_numpy = process_prior(prior)
-
-# # Check simulator, returns PyTorch simulator able to simulate batches.
-# simulator = process_simulator(simulator, prior, prior_returns_numpy)
-
-# # Consistency check after making ready for sbi.
-# check_sbi_inputs(simulator, prior)
-
-# # Sample from the prior and simulate
-# num_simulations = 2000
-# theta = prior.sample((num_simulations,))
-# x = simulator(theta)
-# print(x)
-
-# theta_true = torch.tensor([[4, 7]])
-# # generate our observation
-# x_obs = torch.tensor([0.64704126, 0.61732611])  # Provided observed data
-
-# trainer = NPE(prior)
-# trainer.append_simulations(theta, x).train()
-# posterior = trainer.build_posterior()
-
-# samples = posterior.sample((10000,), x=x_obs)
 
 
-# save_path = "/home/users/scro4690/Documents/GenInv/SBIcompare/src/plotting/figures/Gassmann/sbi_prob.png"
+def simulator_prob(theta):
+    """
+    Batched simulator that returns only the simulated observations with shape (N, 2).
+    If theta is a torch.Tensor -> returns torch.Tensor (float32).
+    If theta is a numpy array -> returns numpy.ndarray (float32).
+    """
+    max_attempts = 1_000_000
+    is_torch = torch.is_tensor(theta)
 
-# m_true=torch.tensor([4, 7])
+    if is_torch:
+        batch_size = theta.shape[0] if theta.ndim > 1 else 1
+        device = theta.device
+    else:
+        theta = np.asarray(theta)
+        batch_size = theta.shape[0] if theta.ndim > 1 else 1
+
+    for attempt in range(max_attempts):
+        if is_torch:
+            # sample nuisance params on the same device
+            m = sample_nuis_parameters_cuda(batch_size, device=device)
+
+            # ensure theta has shape (batch, D)
+            theta_exp = theta if theta.ndim > 1 else theta.unsqueeze(0)
+
+            # Use first TWO columns of m as numerator so we get shape (batch,2)
+            numerator = m[:, :2]                 # shape (batch, 2)
+            denom = (theta_exp * (1 - m[:, 1:2])) + (m[:, 1:2] * m[:, 2:3])  # shape (batch,1)
+
+            # require denominator positive for all batch entries
+            if (denom > 0).all().item():
+                sim_data = torch.sqrt(numerator / denom)   # broadcasts denom (batch,1) to (batch,2)
+                # ensure float32 and correct shape
+                return sim_data.to(dtype=torch.float32, device=device)
+
+        else:
+            # numpy branch
+            m = sample_nuis_parameters_numpy(batch_size)  # returns (batch, K)
+            theta_exp = theta if theta.ndim > 1 else theta[np.newaxis, :]
+            numerator = m[:, :2]   # shape (batch, 2)
+            denom = (theta_exp * (1 - m[:, 1:2])) + (m[:, 1:2] * m[:, 2:3])  # shape (batch,1)
+
+            if (denom > 0).all():
+                sim_data = np.sqrt(numerator / denom)  # broadcasts denom -> (batch,2)
+                return sim_data.astype(np.float32).reshape(batch_size, 2)
+
+    # If we get here, no valid denominator found: return NaNs with correct shape/type
+    print("Warning: All attempts to find a valid denominator failed.")
+    if is_torch:
+        return torch.full((batch_size, 2), float("nan"), device=device, dtype=torch.float32)
+    else:
+        return np.full((batch_size, 2), np.nan, dtype=np.float32)
+
+seed = 42
+torch.manual_seed(seed)
+np.random.seed(seed)
+random.seed(seed)
+torch.cuda.manual_seed_all(seed)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+num_dim = 2# Define the prior
+
+simulator=simulator_prob
+
+prior = BoxUniform(low=0.01 * torch.ones(num_dim), high=10 * torch.ones(num_dim))
+
+# Check prior, return PyTorch prior.
+prior, num_parameters, prior_returns_numpy = process_prior(prior)
+
+# Check simulator, returns PyTorch simulator able to simulate batches.
+simulator = process_simulator(simulator, prior, prior_returns_numpy)
+
+# Consistency check after making ready for sbi.
+check_sbi_inputs(simulator, prior)
+
+# Sample from the prior and simulate
+num_simulations = 2000
+theta = prior.sample((num_simulations,))
+x= simulator(theta)
+print(x)
+
+theta_true = torch.tensor([[4, 7]])
+# generate our observation
+x_obs = torch.tensor([0.64704126, 0.61732611])  # Provided observed data
+
+trainer = NPE(prior)
+trainer.append_simulations(theta, x).train()
+posterior = trainer.build_posterior()
+d_pdf = x_obs + 0.01 * torch.randn(10000, num_dim)
+samples = posterior.sample_batched((10000,), x=x_obs)
+samples = samples.squeeze(1)
+
+save_path = "/workspaces/Gassmann/src/example/marg/results/sbi_prob.png"
+
+m_true=torch.tensor([4, 7])
 
 
-#pairplot(samples, m_true.detach().numpy(), fontsize=15, save_path=save_path)
+pairplot(samples, m_true.detach().numpy(), fontsize=15, save_path=save_path)
 
 ########################################################################################################################
 

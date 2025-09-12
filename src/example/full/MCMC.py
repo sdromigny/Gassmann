@@ -16,7 +16,6 @@ import matplotlib.pyplot as plt
 
 
 from utilities.MCMCFunc import FullMCMC
-from utilities.Gassmann import simulator_prob, simulator_det, sample_nuis_parameters_numpy
 from utilities.PlotHighD import plot_5d_corner
 
 # Initialise the chains

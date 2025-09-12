@@ -19,27 +19,26 @@ def pairplot(
     x = generated_data_2d[:, 0]
     y = generated_data_2d[:, 1]
 
-    # fixed plotting window
     x_lo, x_hi = 0.0, 10.0
     y_lo, y_hi = 0.0, 10.0
 
-    # 1) Compute density grid
+
     x_edges = np.linspace(x_lo, x_hi, bins + 1)
     y_edges = np.linspace(y_lo, y_hi, bins + 1)
     Z, _, _ = np.histogram2d(x, y,
                              bins=[x_edges, y_edges],
                              density=True)
-    # mask out low‐density bins
+
     Z_masked = np.ma.masked_where(Z <= density_threshold, Z)
 
-    # 2) Find which samples are in “high‐density” bins
+
     ix = np.clip(np.digitize(x, x_edges) - 1, 0, bins - 1)
     iy = np.clip(np.digitize(y, y_edges) - 1, 0, bins - 1)
     high_density = Z[ix, iy] > density_threshold
     x_hd = x[high_density]
     y_hd = y[high_density]
 
-    # Now plot exactly as before, but using Z_masked and (x_hd,y_hd)
+
 
     fig = plt.figure(figsize=figsize)
     gs = fig.add_gridspec(2, 2,
@@ -70,7 +69,7 @@ def pairplot(
 
     # — Main 2D histogram —
     ax_main = fig.add_subplot(gs[1, 0])
-    # use pcolormesh so that masked bins stay blank
+    # use pcolormesh
     X, Y = np.meshgrid(x_edges, y_edges)
     pcm = ax_main.pcolormesh(
         X, Y, Z_masked.T,
@@ -78,7 +77,7 @@ def pairplot(
         norm=LogNorm(),
         shading="auto"
     )
-    #ax_main.scatter(x_hd, y_hd, s=5, c="white", alpha=0.8, linewidths=0)
+
     ax_main.plot(m_true[0], m_true[1], 'ro', markersize=6)
     ax_main.set_xlim(x_lo, x_hi)
     ax_main.set_ylim(y_lo, y_hi)

@@ -1,20 +1,12 @@
 import numpy as np
 import torch
 
-# Make sure simulator_det is on the same device.
-# If it’s already defined to operate on torch.Tensor→torch.Tensor, great.
-# Otherwise wrap it into a function that returns a torch.Tensor on the correct device.
-import h5py
-
-          
-
-
-import numpy as np
-import torch
 from scipy.spatial.distance import pdist, squareform
-from utilities.Gassmann import *  # or simulator_prob, as appropriate
+from utilities.Gassmann import *  
 from typing import Tuple
 
+
+## SVGD and sSVGD implementation based on the vip package (Zhang & Curtis (2023))
 class SVGDGassmannDet:
     def __init__(self, d_obs: np.ndarray, sigma: float, device: torch.device):
         """

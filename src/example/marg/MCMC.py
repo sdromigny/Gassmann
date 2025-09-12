@@ -2,22 +2,18 @@
 import torch
 import os
 import sys
-
 # Add the 'src/' directory to Python path
 current_dir = os.path.dirname(__file__)
 
 src_path = os.path.abspath(os.path.join(current_dir, '../..'))
 sys.path.append(src_path)
 
-
 import numpy as np
 import pints
 import matplotlib.pyplot as plt
 
-
-
-from utilities.MCMCFunc import MCSamplingGassmannProb, MCSamplingGassmannDet
-from utilities.Gassmann import simulator_prob, simulator_det, sample_nuis_parameters_numpy
+from utilities.MCMCFunc import MCSamplingGassmannProb, MCSamplingGassmannDet, MCSamplingGassmannIndepProb
+from utilities.Gassmann import sample_nuis_parameters_numpy
 from utilities.Histogram2d import pairplot
 
 
@@ -35,7 +31,7 @@ x_obs = np.array([0.64704126, 0.61732611])
 
 
 # Initialize the class
-model = MCSamplingGassmannProb(x_obs, sigma) 
+model = MCSamplingGassmannIndepProb(x_obs, sigma) 
 
 # Initialize MCMC controller
 mcmc = pints.MCMCController(model, nchains, xs, method=pints.MetropolisRandomWalkMCMC)
@@ -54,13 +50,13 @@ chains = chains[:, burn_in:, :]  # Keep samples after burn-in
 
 
 
-save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/marg/results/mcmc_prob.png"
+save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/marg/results/mcmc_prob_indep.png"
 
 m_true=torch.tensor([4, 7])
 
 samples=np.vstack(chains)
 
-np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/marg/mcmc_samples_prob.npy",samples)
+np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/marg/mcmc_samples_prob_indep.npy",samples)
 
 print(samples.shape)
 

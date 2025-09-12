@@ -10,7 +10,6 @@ sys.path.append(src_path)
 
 import numpy as np
 import torch
-from utilities.SVGDFunc import SVGDGassmannDet, SVGDGassmannProb, sSVGDGassmannProb, sSVGDGassmannDet  # the class file you wrote above
 from utilities.Histogram2d import pairplot
 from utilities.PlotHighD import *
 
