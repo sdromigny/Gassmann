@@ -36,7 +36,7 @@ num_epochs = 2000
 batch_size = 50
 sigma = 0.01
 observed_data = torch.tensor([0.64704126, 0.61732611], device=device)
-#simulator = simulator_prob  # or simulator_det
+
 simulator=simulator_prob
 
 loss_hist = np.array([])

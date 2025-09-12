@@ -1,39 +1,153 @@
+
 # Gassmann
 
+A compact example repository that demonstrates several Bayesian inference approaches for a toy geophysical inverse problem based on a Gassmann equation as forward model.
+
+---
 
 ## Overview
 
-This repository provides an example implementation for inversion using different inference methods in a 5-dimensional model space. It leverages Markov chain Monte Carlo (McMC), stochastic Stein Variational Gradient Descent (sSVGD), Variational Inference with Normalising Flows and Simulation-Based Inference (SBI) to solve a simple inference problem. 
-The forward model is one of the Gassmann equation and is defined in the src/utilities/Gassmann.py python file.
+This repository provides working examples for solving a 5‑dimensional inversion problem using multiple inference methods:
 
+* Markov chain Monte Carlo (McMC)
+* Stochastic Stein Variational Gradient Descent (sSVGD)
+* Variational Inference with Normalising Flows
+* Simulation‑Based Inference (SBI) with Neural Density Estimation (NDE)
+
+The forward model is the Gassmann equation (Gassmann, 1951). The implementation lives in `src/utilities/Gassmann.py` and provides three simulator entry points:
+
+* `simulator_det`: deterministic simulator where nuisance parameters are fixed to their MLE values.
+* `simulator_prob`: probabilistic simulator that samples nuisance parameters from their prior distributions.
+* `simulator_full5`: treats all parameters (including previously nuisance parameters) as target variables for full 5‑dimensional inference.
+
+Use the *full* examples to solve the full‑dimension problem, or the *marginal* examples to run the marginalised inference experiments.
+
+---
+
+## Features
+
+* Example implementations of four inference strategies for a 5‑D Gassmann forward model.
+* Scripts for both full‑dimensional and marginalised inference setups.
+* Tools to reproduce a rejection‑sampling reweighting scheme for MCMC samples.
+* Results and figures saved to the `results/` folder.
+
+---
+
+## Repository layout (important files & folders)
+
+```
+src/
+  utilities/
+    Gassmann.py         # forward model and simulators
+    MCMCFunc.py            # McMC sampling functions
+    SVGDFunc.py            # SVGD and sSVGD smapling functions
+    Histogram2d.py         # Plotting function for the marginalised inferences
+    PlotHighD.py           # Plotting function for the full-dimensional inferences
+    FlowMatchingEstimator.py, MLP.py, TrainFlowMatching.py          # Functions to run an alternative SBI algorithm, not based on Normalising Flows, but on Flow matching, which showed good results on the marginalised inference problem 
+  example/
+    full/                # scripts for full‑dimensional inference (MCMC, sSVGD, NF, SBI)
+        results/         # where figures are saved
+    marg/                # scripts for marginalised inference experiments
+        results/         # where figures are saved
+    marg/RejectionSampling.py  # reweight MCMC samples using two weighting schemes
+samples/                 # where posterior samples are saved
+requirements.txt         # Python package dependencies
+README.md                # this file
+```
+
+---
 
 ## Installation
 
-Install the required Python packages using:
+Create a virtual environment (recommended) and install dependencies:
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate  
 pip install -r requirements.txt
 ```
 
-## Using the code
+The repository was developed and tested on Debian and Github Codespaces with (representative versions):
 
-To run the full-dimensional inference problem using McMC, sSVGD, Normalising Flows and SBI, please refer to the respective python files in the src/example/full folder
-To run the marginalised inference problem, run the python files in the src/example/marg folder with respective Bayesian methods.
+* NumPy v2.3.1
+* SciPy v1.16.0
+* Matplotlib v3.10.3
+* PyTorch v2.5.1
+* normflows v1.7.3
+* pints v0.5.0
+* sbi v0.25.0
+
+(Exact versions are listed in `requirements.txt`.)
+
+---
+
+## Usage
+
+### Full‑dimensional inference
+
+Run the example scripts in `src/example/full/` to run the full‑dimensional (5‑D) inversion problem with the available inference methods. Example invocation pattern:
+
+```bash
+python src/example/full/<method_script>.py
+```
+
+Replace `<method_script>.py` with the script corresponding to the method you want to run (e.g. MCMC, sSVGD, NormFlows, or SBI). Each script will produce posterior distribution plots and save output to the `results/` folder and `samples/`.
+
+### Marginalised inference
+
+To run the marginalised inference experiments (where nuisance parameters are integrated out or treated separately), run the scripts in `src/example/marg/`:
+
+```bash
+python src/example/marg/<script>.py
+```
+
+The forward model call `simulator_det` corresponds to the case where the nuisance parameters are set to their Maximum Likelihood Estimates (MLEs) values. The forward model call `simulator_prob` corresponds to the case where we sample the nuisance parameters using the `sample_and_log_gaussians` function in `src/utilities/Gassmann.py`.
+
+### Rejection sampling (reweighting MCMC samples)
+
+To reproduce the rejection‑sampling reweighting of MCMC samples according to two different weighting schemes, run:
+
+```bash
+python src/example/marg/RejectionSampling.py
+```
+
+Provide or point the script to the MCMC samples you previously drew and saved to the `samples/` folder; the script will output reweighted sample sets and figures in `results/`.
+
+---
+
+
+## Forward model reference
+
+Gassmann, F., 1951. *Elastic waves through a packing of spheres*, Geophysics, 16(4), 673–685.
+
+The forward model code is implemented in `src/utilities/Gassmann.py` and documents the mapping between model parameters and the predicted observations used by the example inference pipelines.
+
+---
+
+# Bayesian inference methods references
+
+Clerx, M., Robinson, M., Lambert, B., Lei, C. L., Ghosh, S., Mirams, G. R., & Gavaghan, D. J., 2018.
+*Probabilistic inference on noisy time series (pints )*, arXiv preprint arXiv:1812.07388.
+Stimper, V., Liu, D., Campbell, A., Berenz, V., Ryll, L., Sch¨olkopf, B., & Hern´andez-Lobato, J. M., 2023.
+*normflows: A pytorch package for normalizing flows*, arXiv preprint arXiv:2302.12014.
+Tejero-Cantero, A., Boelts, J., Deistler, M., Lueckmann, J.-M., Durkan, C., Gonc¸alves, P. J., Greenberg,
+D. S., & Macke, J. H., 2020. *sbi: A toolkit for simulation-based inference*, Journal of Open Source
+Software, 5(52), 2505. doi:10.21105/joss.02505.
+Zhang, X., & Curtis, A. (2024). *VIP-Variational Inversion Package with example implementations of Bayesian tomographic imaging*. Seismica, 3(1).
 
 
 ## License
-This project is licensed under the Apache-2.0 License.
 
-## References and Acknowledgements
-This repository uses the following open-source software libraries:
+This project is licensed under the Apache‑2.0 License.
 
-numPy v2.3.1 (https://github.com/numpy/numpy)
-sciPy v1.16.0 (https://github.com/scipy/scipy)
-matplotlib v3.10.3 (https://github.com/matplotlib/matplotlib)
-pytorch v2.5.1 (https://github.com/pytorch/pytorch)
-normflows v1.7.3 (https://github.com/VincentStimper/normalizing-flows)
-pints v0.5.0 (https://github.com/pints-team/pints)
-sbi v0.25.0 (https://github.com/sbi-dev/sbi)
+---
 
-Sixtine Dromigny is funded by a UKRI NERC DTP Award (NE/S007474/1) and the Clarendon Scholarship (SR506) and gratefully acknowledges their support.
+## Acknowledgements
 
+Sixtine Dromigny is funded by a UKRI NERC DTP Award (NE/S007474/1) and the Clarendon Scholarship (SR506). The author gratefully acknowledges their support.
+
+---
+
+## Contact / Questions
+
+If you have questions or want help reproducing a particular experiment, please open an issue or contact the repository author (sixtine.dromigny@stx.ox.ac.uk).
