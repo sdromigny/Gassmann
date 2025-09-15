@@ -56,7 +56,7 @@ _, num_particles, n_params = chains.shape
 samples = chains.reshape(-1, n_params)  # shape = ((N_iter_after_burn * num_particles), n_params)
 
 
-save_path = "/home/users/scro4690/Documents/GenInv/SBIcompare/src/plotting/figures/Gassmann/svgd_det.png"
+save_path = "src/example/marg/results/svgd_det.png"
 
 m_true=torch.tensor([4, 7])
 
@@ -111,13 +111,13 @@ print("Flattened samples shape:", samples.shape)
 
 # 7) (Optional) Plot pairplot of θ‐samples
 
-save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/marg/results/ssvgd_prob.png"
+save_path = "src/example/marg/results/ssvgd_prob.png"
 
 m_true=torch.tensor([4, 7])
 
 samples=np.vstack(chains)
 
-np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/marg/ssvgd_samples_prob.npy",samples)
+np.save("src/example/samples/ssvgd_samples_prob.npy",samples)
 
 pairplot(samples, m_true.detach().numpy(), fontsize=15, save_path=save_path)
 
@@ -176,12 +176,12 @@ print("Flattened samples shape:", samples.shape)
 
 # 7) (Optional) Plot pairplot of θ‐samples
 
-save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/marg/results/ssvgd_det.png"
+save_path = "src/example/marg/results/ssvgd_det.png"
 
 m_true=torch.tensor([4, 7])
 
 samples=np.vstack(chains)
 
-np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/marg/ssvgd_samples_det.npy",samples)
+np.save("src/example/samples/ssvgd_samples_det.npy",samples)
 
 pairplot(samples, m_true.detach().numpy(), fontsize=15, save_path=save_path)

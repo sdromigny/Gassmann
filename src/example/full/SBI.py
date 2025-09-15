@@ -90,9 +90,9 @@ xs=x_obs + 0.01 * torch.randn(100, data_dim)
 samples = posterior.sample_batched((num_samples,), x=xs)
 
 samples_2d = samples.reshape(-1, samples.shape[-1])
-save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/full/results/sbi.png"
+save_path = "src/example/full/results/sbi.png"
 
-np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/full/sbi.npy",samples_2d)
+np.save("src/example/samples/sbi.npy",samples_2d)
 plot_5d_corner(samples_2d, save_path=save_path)
 
 

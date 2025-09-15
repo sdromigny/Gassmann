@@ -12,14 +12,14 @@ from ignite.utils import *
 import matplotlib.pyplot as plt
 
 
-mcmc_samples=np.load("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/full/mcmc_samples.npy")
+mcmc_samples=np.load("src/example/samples/mcmc_samples.npy")
 
 
-nf_samples=np.load("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/full/nf_samples.npy")
+nf_samples=np.load("src/example/samples/samples/nf_samples.npy")
 
-sbi_samples=np.load("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/full/sbi.npy")
+sbi_samples=np.load("src/example/samples/samples/sbi.npy")
 
-ssvgd_samples=np.load("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/full/ssvgd.npy")
+ssvgd_samples=np.load("src/example/samples/ssvgd.npy")
 
 
 #################################################################################

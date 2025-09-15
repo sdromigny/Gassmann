@@ -50,7 +50,7 @@ src/
     marg/                # scripts for marginalised inference experiments
         results/         # where figures are saved
     marg/RejectionSampling.py  # reweight MCMC samples using two weighting schemes
-samples/                 # where posterior samples are saved
+    samples/                 # where posterior samples are saved
 requirements.txt         # Python package dependencies
 README.md                # this file
 ```
@@ -112,6 +112,16 @@ python src/example/marg/RejectionSampling.py
 ```
 
 Provide or point the script to the MCMC samples you previously drew and saved to the `samples/` folder; the script will output reweighted sample sets and figures in `results/`.
+
+### Comparison of the posterior estimates quality
+ 
+Run the comparison script to compute two distance metrics between posterior samples produced by the different inference methods (Sinkhorn distance and Maximum Mean Discrepancy — MMD). From either the `src/example/full` or `src/example/marg` folder execute:
+
+```bash
+python src/example/marg/Comparison.py
+```
+
+The script loads saved sample arrays (MCMC, NF, SBI, sSVGD) from `src/example/samples/`. It then computes the Sinkhorn distance and MMD between the two posterior sample sets you select in the file, and prints the results to stdout. By default the script uses the last 1,000 samples for the Sinkhorn calculation and the last 10,000 samples for the MMD. To compare a different pair of posteriors, change the x and y assignments in the script (e.g. replace mcmc_samples / sbi_samples with any other pair), or change the slicing of the samples to compute the distances with.
 
 ---
 

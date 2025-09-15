@@ -63,40 +63,36 @@ def plot_marginals_and_pairs(samples, labels=None, truths=None, bins=50, figsize
         plt.savefig(save_path, dpi=150)
     plt.show()
 
-
-# Example usage (assuming samples is a numpy array shape (N, D) and m_true length D):
-# samples = np.random.randn(10000, 5)
-# m_true = np.array([0.5, 1.2, -0.3, 2.0, 0.7])
-# labels = ["param1", "param2", "param3", "param4", "param5"]
-# plot_marginals_and_pairs(samples, labels=labels, truths=m_true, bins=40, save_path="corner_plot.png")
-
-
 import numpy as np
 import matplotlib.pyplot as plt
-
-import matplotlib.pyplot as plt
-import numpy as np
 from matplotlib.colors import LogNorm
 
-
-def plot_5d_corner(samples, fontsize=20,
+def plot_5d_corner(samples=None, fontsize=20,
                    labels=None,
                    truths=None,
                    bins=80,
                    figsize=(12, 12),
                    save_path=None):
+    """
+    Plot a 5D corner plot. If samples is None or empty (0 rows), the
+    function will only draw axis frames and truth markers (if provided).
+    """
+    # Accept samples=None or an array with zero rows
+    if samples is None:
+        samples = np.empty((0, 5))
     samples = np.asarray(samples)
+    if samples.ndim != 2 or samples.shape[1] != 5:
+        raise AssertionError("Need samples with shape (N,5) or samples=None")
     N, D = samples.shape
-    assert D == 5, "Need 5D samples"
 
     plt.rcParams.update({
         "font.family": "serif",
-        "font.size": fontsize,          # default, affects text (titles, legends, etc)
-        "axes.labelsize": fontsize,     # for your G_frame, ρ, φ labels
-        "xtick.labelsize": 4,    # smaller tick numbers on all axes
+        "font.size": fontsize,
+        "axes.labelsize": fontsize,
+        "xtick.labelsize": 4,
         "ytick.labelsize": 4,
     })
-        
+
     if labels is None:
         labels = [
             r"$\rho_{\rm fluid,1}$",
@@ -108,8 +104,8 @@ def plot_5d_corner(samples, fontsize=20,
     if truths is not None:
         truths = np.asarray(truths)
         assert truths.shape[0] == D
-    
-    # Your fixed parameter ranges:
+
+    # fixed parameter ranges:
     axis_ranges = [
         (0, 10),     # θ₀
         (0, 10),     # θ₁
@@ -117,69 +113,80 @@ def plot_5d_corner(samples, fontsize=20,
         (0.3, 0.5),  # θ₃
         (42, 48),    # θ₄
     ]
-    
+
+    has_samples = N > 0
+
     fig, axes = plt.subplots(D, D, figsize=figsize)
     plt.subplots_adjust(wspace=0.05, hspace=0.05)
-    
+
     for i in range(D):
         for j in range(D):
             ax = axes[i, j]
-            
+
             # Upper triangle: blank
             if j > i:
                 ax.axis("off")
                 continue
-            
-            # Diagonal panels: 1D histograms
+
+            # Diagonal panels: 1D histograms (or empty with vline)
             if i == j:
-                data = samples[:, i]
-                # fix x-axis, let y-axis autoscale
                 ax.set_xlim(axis_ranges[i])
-                ax.hist(data,
-                        bins=bins,
-                        range=axis_ranges[i],
-                        density=True,
-                        histtype="stepfilled",
-                        alpha=1,
-                        color="midnightblue")
+                if has_samples:
+                    data = samples[:, i]
+                    ax.hist(data,
+                            bins=bins,
+                            range=axis_ranges[i],
+                            density=True,
+                            histtype="stepfilled",
+                            alpha=1,
+                            color="midnightblue")
+                else:
+                    # keep the panel empty but set a reasonable y-limits
+                    ax.set_ylim(0, 1)
+                    ax.set_yticks([])
+
                 if truths is not None:
                     ax.axvline(truths[i],
                                color="k",
                                linestyle="--",
                                lw=1)
                 ax.set_yticks([])  # No y-ticks on marginals
-            
-            # Lower triangle: 2D density
+
+            # Lower triangle: 2D density (or empty background)
             else:
-                x, y = samples[:, j], samples[:, i]
                 xr, yr = axis_ranges[j], axis_ranges[i]
-                # fix both axes
                 ax.set_xlim(xr)
                 ax.set_ylim(yr)
-                ax.hist2d(x,
-                          y,
-                          bins=bins,
-                          range=[xr, yr],
-                          cmap="viridis",
-                          norm=LogNorm())
+                if has_samples:
+                    x, y = samples[:, j], samples[:, i]
+                    ax.hist2d(x,
+                              y,
+                              bins=bins,
+                              range=[xr, yr],
+                              cmap="viridis",
+                              norm=LogNorm())
+                # else: leave blank axes (no points/hist2d)
                 if truths is not None:
-                    ax.plot(truths[j],
-                            truths[i],
-                            "wx",
-                            markersize=6,
-                            markeredgewidth=2)
-            
+                    ax.scatter([truths[j]],
+                               [truths[i]],
+                               s=100,
+                               marker="o",
+                               facecolors="red",
+                               edgecolors="red",
+                               linewidths=0.8,
+                               zorder=10)
+
             # Axis labeling only on bottom row / left column
             if i == D - 1:
                 ax.set_xlabel(labels[j], fontsize=fontsize)
             else:
                 ax.set_xticks([])
-            
+
             if j == 0:
                 ax.set_ylabel(labels[i], fontsize=fontsize)
             else:
                 ax.set_yticks([])
-    
+
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
     plt.show()

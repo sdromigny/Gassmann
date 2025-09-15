@@ -73,13 +73,13 @@ print("Flattened samples shape:", samples.shape)
 # 7) (Optional) Plot pairplot of θ‐samples
 
 
-save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/full/results/ssvgd.png"
+save_path = "src/example/full/results/ssvgd.png"
 
 m_true=torch.tensor([4, 7])
 
 samples=np.vstack(chains)
 
-np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/full/ssvgd.npy",samples)
+np.save("src/example/samples/ssvgd.npy",samples)
 
 print(samples.shape)
 

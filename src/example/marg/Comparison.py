@@ -12,22 +12,22 @@ from tarp import get_tarp_coverage
 import matplotlib.pyplot as plt
 
 
-mcmc_samples_det=np.load("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/mcmc_samples_det.npy")
+mcmc_samples_det=np.load("src/example/samples/mcmc_samples_det.npy")
 
-mcmc_samples_prob=np.load("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/mcmc_samples_prob.npy")
+mcmc_samples_prob=np.load("src/example/samples/samples/mcmc_samples_prob.npy")
 
 
-nf_samples_det=np.load("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/nf_samples_det.npy")
+nf_samples_det=np.load("src/example/samples/nf_samples_det.npy")
 
-nf_samples_prob=np.load("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/nf_samples_prob.npy")
+nf_samples_prob=np.load("src/example/samples/nf_samples_prob.npy")
 
-fmpe_samples_det=np.load("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/fmpe_samples_det.npy")
+fmpe_samples_det=np.load("src/example/samples/fmpe_samples_det.npy")
 
-fmpe_samples_prob=np.load("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/fmpe_samples_prob.npy")
+fmpe_samples_prob=np.load("src/example/samples/fmpe_samples_prob.npy")
 
-ssvgd_samples_det=np.load("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/ssvgd_samples_det.npy")
+ssvgd_samples_det=np.load("src/example/samples/ssvgd_samples_det.npy")
 
-ssvgd_samples_prob=np.load("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/ssvgd_samples_prob.npy")
+ssvgd_samples_prob=np.load("src/example/samples/ssvgd_samples_prob.npy")
 
 
 #################################################################################

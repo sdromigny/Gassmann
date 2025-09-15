@@ -110,11 +110,11 @@ print(theta_samples.shape)  # should be (2**20, 5)
 
 theta_samples=theta_samples.detach().cpu().numpy()
 
-save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/full/results/nf.png"
+save_path = "src/example/full/results/nf.png"
 
 
 
-np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/full/nf_samples.npy",theta_samples)
+np.save("src/example/samples/nf_samples.npy",theta_samples)
 
 
 plot_5d_corner(theta_samples, save_path=save_path)

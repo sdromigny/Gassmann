@@ -38,7 +38,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 # Import your training class and any required components
 
-from utilities.Gassmann import simulator_prob, simulator_det, sample_nuis_parameters_cuda
+from utilities.Gassmann import simulator_prob, simulator_det, sample_nuis_parameters_cuda, sample_nuis_parameters_numpy
 from utilities.Histogram2d import pairplot
 
 
@@ -153,7 +153,7 @@ d_pdf = x_obs + 0.01 * torch.randn(10000, num_dim)
 samples = posterior.sample_batched((10000,), x=x_obs)
 samples = samples.squeeze(1)
 
-save_path = "/workspaces/Gassmann/src/example/marg/results/sbi_prob.png"
+save_path = "src/example/marg/results/sbi_prob.png"
 
 m_true=torch.tensor([4, 7])
 
@@ -252,10 +252,10 @@ samples = torch.cat(samples, dim=0)
 # Plot
 samples_np = samples.cpu().numpy()
 
-#np.save("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/fmpe_samples_prob.npy",samples_np)
+
 m_true = torch.tensor([4, 7]).numpy()
 
-save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/marg/results/fm_prob.png"
+save_path = "src/example/marg/results/fm_prob.png"
 pairplot(samples_np, m_true, fontsize=15, save_path=save_path)
 
 
@@ -354,8 +354,8 @@ samples = torch.cat(samples, dim=0)
 # Plot
 samples_np = samples.cpu().numpy()
 
-#np.save("/home/users/scro4690/Documents/GenInv/SBIcompare/src/examples/gassmann/samples/fmpe_samples_det.npy",samples_np)
+
 m_true = torch.tensor([4, 7]).numpy()
 
-save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/marg/results/fm_det.png"
+save_path = "src/example/marg/results/fm_det.png"
 pairplot(samples_np, m_true, fontsize=15, save_path=save_path)

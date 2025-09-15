@@ -50,13 +50,13 @@ chains = chains[:, burn_in:, :]  # Keep samples after burn-in
 
 
 
-save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/marg/results/mcmc_prob_indep.png"
+save_path = "src/example/marg/results/mcmc_prob_indep.png"
 
 m_true=torch.tensor([4, 7])
 
 samples=np.vstack(chains)
 
-np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/marg/mcmc_samples_prob_indep.npy",samples)
+np.save("src/example/samples/mcmc_samples_prob_indep.npy",samples)
 
 print(samples.shape)
 
@@ -93,13 +93,13 @@ burn_in = 1000  # Adjust this value based on your needs
 # Discard the first `burn_in` samples for all chains
 chains = chains[:, burn_in:, :]  # Keep samples after burn-in
 
-save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/marg/results/mcmc_det.png"
+save_path = "src/example/marg/results/mcmc_det.png"
 
 m_true=torch.tensor([4, 7])
 
 samples=np.vstack(chains)
 
-np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/marg/mcmc_samples_det.npy",samples)
+np.save("src/example/samples/mcmc_samples_det.npy",samples)
 
 print(samples.shape)
 

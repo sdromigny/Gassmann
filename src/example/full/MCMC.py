@@ -59,13 +59,13 @@ chains = chains[:, burn_in:, :]  # Keep samples after burn-in
 
 chains_thinned = chains[:, ::thin, :] 
 
-save_path = "/home/users/scro4690/Documents/GenInv/Gassmann/src/example/full/results/mcmc.png"
+save_path = "src/example/full/results/mcmc.png"
 
 
 
 samples=np.vstack(chains_thinned)
 
-np.save("/home/users/scro4690/Documents/GenInv/Gassmann/src/example/samples/full/mcmc_samples.npy",samples)
+np.save("src/example/samples/mcmc_samples.npy",samples)
 
 print(samples.shape)
 
