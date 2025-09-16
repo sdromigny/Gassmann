@@ -51,7 +51,7 @@ for it in tqdm(range(num_epochs)):
     optimizer.zero_grad()
 
     z0 = torch.randn(batch_size, dim, device=device)
-    # 2. Flow forward: w, log_det_flow = nfm.forward_and_log_det(z0)
+
     w, log_det_flow = nfm.forward_and_log_det(z0)
 
     theta, log_det_trans = log_det_transform(w, low=0.0, high=10.0)
@@ -100,7 +100,6 @@ pairplot(theta_samples.detach().cpu().numpy(), m_true.detach().cpu().numpy(), fo
 
 ##########################################################################################################################
 
-# Device configuration
 
 # Device configuration
 device = "cuda" if torch.cuda.is_available() else "cpu"

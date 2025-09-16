@@ -22,8 +22,8 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-import normflows as nf  # Assuming you have normflows installed
-from utilities.Gassmann import simulator_full5, sample_and_log_gaussians  # Or simulator_det
+import normflows as nf  
+from utilities.Gassmann import simulator_full5, sample_and_log_gaussians
 from utilities.PlotHighD import plot_5d_corner
 
 # Device configuration
@@ -42,7 +42,7 @@ num_epochs = 800
 batch_size = 5000
 sigma = 0.01
 observed_data = torch.tensor([0.64704126, 0.61732611], device=device)
-#simulator = simulator_prob  # or simulator_det
+
 simulator=simulator_full5
 
 loss_hist = np.array([])

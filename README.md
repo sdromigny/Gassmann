@@ -67,7 +67,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-The repository was developed and tested on Debian and Github Codespaces with (representative versions):
+The repository was developed with:
 
 * NumPy v2.3.1
 * SciPy v1.16.0
@@ -77,7 +77,7 @@ The repository was developed and tested on Debian and Github Codespaces with (re
 * pints v0.5.0
 * sbi v0.25.0
 
-(Exact versions are listed in `requirements.txt`.)
+(See `requirements.txt` for the exhaustive list)
 
 ---
 

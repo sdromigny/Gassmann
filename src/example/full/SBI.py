@@ -56,19 +56,19 @@ x_obs = torch.tensor([0.64704126, 0.61732611])  # Provided observed data
 
 # Sample from the prior and simulate
 num_simulations = 4000
-# 1) Uniform[0,10] on θ₀ and θ₁
+# Uniform[0,10] on θ₀ and θ₁
 low_u  = torch.tensor([0.0, 0.0])
 high_u = torch.tensor([10.0, 10.0])
 uniform1 = BoxUniform(low=low_u, high=high_u)
 uniform2 = BoxUniform(low=low_u, high=high_u)
 
-# 2) Joint Gaussian on θ₂,θ₃,θ₄ with your means & stds
+# Joint Gaussian on θ₂,θ₃,θ₄ with your means & stds
 means = torch.tensor([8.5, 0.37, 44.8])
 stds  = torch.tensor([0.3,  0.02, 0.8])
 cov3  = torch.diag(stds**2)
 gauss3 = MultivariateNormal(loc=means, covariance_matrix=cov3)
 
-# 3) Combine into one 5D prior
+# Combine into one 5D prior
 prior = MultipleIndependent([uniform2, gauss3])
 
 # Test drawing a sample

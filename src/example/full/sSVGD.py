@@ -15,15 +15,15 @@ from utilities.SVGDFunc import FullsSVGD
 from utilities.PlotHighD import *
 
 
-# 1) Define observed data and noise
+# Define observed data and noise
 x_obs = np.array([0.64704126, 0.61732611], dtype=np.float32)
 sigma = 0.01
 
-# 2) Choose device
+# Choose device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
-# 3) Number of particles & initial positions in θ‐space
+# Number of particles & initial positions in θ‐space
 num_particles = 100
 n_theta=5
 xs = []
@@ -37,10 +37,10 @@ for _ in range(num_particles):
     xs.append(np.concatenate([main_params, latent_params]))
 xs = np.array(xs)
 
-# 4) Instantiate SVGD sampler
+# Instantiate SVGD sampler
 svgd = FullsSVGD(d_obs=x_obs, sigma=sigma, device=device)
 
-# 5) Run SVGD
+# Run SVGD
 n_iter  = 10000000
 step_sz = 1e-3
 bandw   = -1   # median trick
@@ -57,9 +57,9 @@ particle_history = svgd.update(
     track_history=True,
 )
 print("particle_history.shape:", particle_history.shape)
-# → (n_iter+1, num_particles, n_theta)
 
-# 6) Discard burn‐in and flatten
+
+# Discard burn‐in and flatten
 burn_in = 10000
 thin=10
 chains = particle_history[burn_in:, :, :]  # shape = (n_iter+1 - burn_in, num_particles, n_theta)
@@ -70,7 +70,7 @@ chains_thinned = chains[::thin, :, :]
 samples = chains_thinned.reshape(-1, n_theta)      # shape = ((n_iter+1 - burn_in)*num_particles, n_theta)
 print("Flattened samples shape:", samples.shape)
 
-# 7) (Optional) Plot pairplot of θ‐samples
+#Plot pairplot of samples
 
 
 save_path = "src/example/full/results/ssvgd.png"

@@ -7,7 +7,7 @@ from ignite.metrics import *
 from ignite.metrics.clustering import *
 from ignite.metrics.regression import *
 from ignite.utils import *
-from tarp import get_tarp_coverage
+
 
 import matplotlib.pyplot as plt
 
