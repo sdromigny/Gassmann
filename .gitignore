@@ -1,9 +1,7 @@
-gassmann_env/*
+
 *.npy
 src/example/samples/*
 *.pyc
 *.log
 sbi-logs/*
 wandb/
-Test123/*
-FMPEGass5_param/*
