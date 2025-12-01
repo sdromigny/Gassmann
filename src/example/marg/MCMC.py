@@ -31,7 +31,7 @@ x_obs = np.array([0.64704126, 0.61732611])
 
 
 # Initialize the class
-model = MCSamplingGassmannIndepProb(x_obs, sigma) 
+model = MCSamplingGassmannProb(x_obs, sigma) 
 
 # Initialize MCMC controller
 mcmc = pints.MCMCController(model, nchains, xs, method=pints.MetropolisRandomWalkMCMC)
