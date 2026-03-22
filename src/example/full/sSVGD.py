@@ -1,3 +1,5 @@
+import numpy as np
+import torch
 
 import torch
 import os
@@ -8,79 +10,99 @@ current_dir = os.path.dirname(__file__)
 
 src_path = os.path.abspath(os.path.join(current_dir, '../..'))
 sys.path.append(src_path)
-
-import numpy as np
-import torch
-from utilities.SVGDFunc import FullsSVGD
+from utilities.NormFlows import *
+from utilities.SVGDFunc import *
 from utilities.PlotHighD import *
+from utilities.Gassmann import *
+import numpy as np
 
+import time
+start_time = time.perf_counter()
 
-# Define observed data and noise
-x_obs = np.array([0.64704126, 0.61732611], dtype=np.float32)
+# Device configuration
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Set observed data and uncertainty
+x_obs = np.array([0.64704126, 0.61732611], dtype=np.float64)
 sigma = 0.01
 
-# Choose device
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Using device:", device)
 
-# Number of particles & initial positions in θ‐space
+
+# Set inversion parameters
 num_particles = 100
-n_theta=5
+n_theta = 5
+
 xs = []
 for _ in range(num_particles):
-    main_params = np.random.uniform(0, 10, size=len(x_obs))
+    main_params = np.random.uniform(0, 10, size=2)
     latent_params = np.array([
-        np.random.normal(8.5, 0.3),  # G_frame
-        np.random.normal(0.37, 0.02),  # Porosity
+        np.random.normal(8.5, 0.3),   # G_frame
+        np.random.normal(0.37, 0.02), # Porosity
         np.random.normal(44.8, 0.8)   # Rho_grain
     ])
     xs.append(np.concatenate([main_params, latent_params]))
-xs = np.array(xs)
 
-# Instantiate SVGD sampler
-svgd = FullsSVGD(d_obs=x_obs, sigma=sigma, device=device)
+xs = np.array(xs, dtype=np.float64)
 
-# Run SVGD
-n_iter  = 10000000
+# Set log likelihood definition
+lnprob = lnprob_factory(
+    forward_model=simulator_full5,
+    d_obs=x_obs,
+    sigma=sigma, 
+    device=device
+)
+
+
+svgd = sSVGD(
+    lnprob=lnprob,
+    kernel="rbf",
+    h=1.0,
+    weight="grad",
+    out="samples_time.hdf5",
+)
+
+n_iter = 200000
+
 step_sz = 1e-3
-bandw   = -1   # median trick
-alpha   = 0.9
+burn_in = 20000
 
-# If you want to track every iteration’s particles:
-particle_history = svgd.update(
-    x0=xs,
+thin = 10
+
+z0 = np.random.randn(num_particles, n_theta)
+
+
+losses, theta_final = svgd.sample(
+    x0=z0,
     n_iter=n_iter,
     stepsize=step_sz,
-    bandwidth=bandw,
-    alpha=alpha,
-    debug=True,
-    track_history=True,
+    burn_in=burn_in,
+    thin=thin,
+    chunks=None
 )
-print("particle_history.shape:", particle_history.shape)
+
+print("Final theta shape:", theta_final.shape)
 
 
-# Discard burn‐in and flatten
-burn_in = 10000
-thin=10
-chains = particle_history[burn_in:, :, :]  # shape = (n_iter+1 - burn_in, num_particles, n_theta)
+import h5py
+with h5py.File("samples_time.hdf5", "r") as f:
+    z_samples = np.array(f["samples"])  
 
-chains_thinned = chains[::thin, :, :] 
+z_samples = z_samples.reshape(-1, n_theta)
+
+# Map back to physical space
+z_t = torch.tensor(z_samples, device=device)
+theta_samples, _ = batch_constrained_transform(z_t)
+
+theta_samples = theta_samples.detach().cpu().numpy()
+
+# Save the samples and plot
+np.save("./src/example/samples/full/ssvgd_larger_time.npy", theta_samples)
+
+truths = [4.0, 7.0, 8.5, 0.37, 44.8]
+
+plot_5d_corner(theta_samples, truths=truths, save_path="./src/example/full/results/ssvgd_larger_time.png")
 
 
-samples = chains_thinned.reshape(-1, n_theta)      # shape = ((n_iter+1 - burn_in)*num_particles, n_theta)
-print("Flattened samples shape:", samples.shape)
+end_time = time.perf_counter()
 
-#Plot pairplot of samples
-
-
-save_path = "src/example/full/results/ssvgd.png"
-
-m_true=torch.tensor([4, 7])
-
-samples=np.vstack(chains)
-
-np.save("src/example/samples/ssvgd.npy",samples)
-
-print(samples.shape)
-
-plot_5d_corner(samples, save_path=save_path)
+print(f"Total runtime: {end_time - start_time:.2f} seconds")
