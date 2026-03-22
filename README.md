@@ -42,6 +42,7 @@ src/
     MCMCFunc.py            # McMC sampling functions
     SVGDFunc.py            # SVGD and sSVGD sampling functions
     Histogram2d.py         # Plotting function for the marginalised inferences
+    KL_example.py          # Reproduce simple Gaussian example to demonstrate the Jensen gap
     PlotHighD.py           # Plotting function for the full-dimensional inferences
     FlowMatchingEstimator.py, MLP.py          # Functions to run an alternative SBI algorithm, not based on Normalising Flows, but on Flow matching, which showed good results on the marginalised inference problem 
   example/
