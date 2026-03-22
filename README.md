@@ -43,11 +43,11 @@ src/
     SVGDFunc.py            # SVGD and sSVGD sampling functions
     Histogram2d.py         # Plotting function for the marginalised inferences
     PlotHighD.py           # Plotting function for the full-dimensional inferences
-    FlowMatchingEstimator.py, MLP.py, TrainFlowMatching.py          # Functions to run an alternative SBI algorithm, not based on Normalising Flows, but on Flow matching, which showed good results on the marginalised inference problem 
+    FlowMatchingEstimator.py, MLP.py          # Functions to run an alternative SBI algorithm, not based on Normalising Flows, but on Flow matching, which showed good results on the marginalised inference problem 
   example/
     full/                # scripts for full‑dimensional inference (MCMC, sSVGD, NF, SBI)
         results/         # where figures are saved
-    marg/                # scripts for marginalised inference experiments
+    marg/                # scripts for marginalised inference experiments (probabilistic and deterministic simulator)
         results/         # where figures are saved
     marg/RejectionSampling.py  # reweight MCMC samples using two weighting schemes
     samples/                 # where posterior samples are saved
