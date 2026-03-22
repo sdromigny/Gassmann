@@ -1,108 +1,92 @@
 
+import numpy as np
 import torch
+import math
+import time
 import os
 import sys
-# Add the 'src/' directory to Python path
+import time
+
 current_dir = os.path.dirname(__file__)
 
 src_path = os.path.abspath(os.path.join(current_dir, '../..'))
 sys.path.append(src_path)
 
-import numpy as np
-import pints
-import matplotlib.pyplot as plt
-
-from utilities.MCMCFunc import MCSamplingGassmannProb, MCSamplingGassmannDet, MCSamplingGassmannIndepProb
-from utilities.Gassmann import sample_nuis_parameters_numpy
+from tqdm import trange
+from utilities.Gassmann import simulator_prob, simulator_det, sample_nuis_parameters_numpy
 from utilities.Histogram2d import pairplot
 
-
-# Initialise the chains
-nchains = 10 # total number of chains
-xs = [[1, 5]] * nchains # initial positions for all chains
-
-
-# Properties of the observed data (assumed error: sigma, m: prior, x_obs: observed data values)
-sigma=0.01
-m=sample_nuis_parameters_numpy(1)
-x_obs = np.array([0.64704126, 0.61732611])
+from utilities.MCMCFunc import *
 
 
 
+import time
+start_time = time.perf_counter()
 
-# Initialize the class
-model = MCSamplingGassmannProb(x_obs, sigma) 
+# Set observed data and uncertainty
+d_obs = np.array([0.64704126, 0.61732611])
+sigma = 0.01
 
-# Initialize MCMC controller
-mcmc = pints.MCMCController(model, nchains, xs, method=pints.MetropolisRandomWalkMCMC)
+# Set log likelihood definition
+model = ExampleModel(d_obs, sigma)
 
-# Add stopping criterion
-mcmc.set_max_iterations(1000000)
-
-# Run the MCMC sampling
-chains = mcmc.run()
-
-# Define the burn-in period
-burn_in = 1000# Adjust this value based on your needs
-
-# Discard the first `burn_in` samples for all chains
-chains = chains[:, burn_in:, :]  # Keep samples after burn-in
+# Set inversion parameters
+nchains = 10
+xs = [np.array([1.0, 5.0])] * nchains
 
 
+# Run the McMC sampler
+ctrl = PseudoMarginalMCMCController(model, nchains, xs)
+ctrl.set_max_iterations(1000000)
+ctrl.set_prop_scale(0.05)
+ctrl.set_report_interval(5000)
 
-save_path = "src/example/marg/results/mcmc_prob_indep.png"
+chains = ctrl.run(verbose=True)
 
-m_true=torch.tensor([4, 7])
-
-samples=np.vstack(chains)
-
-np.save("src/example/samples/mcmc_samples_prob_indep.npy",samples)
-
-print(samples.shape)
-
-pairplot(samples, m_true.detach().numpy(), fontsize=15, save_path=save_path)
-
-########################################################################################################
-
-# # Initialise the chains
-nchains = 10 # total number of chains
-xs = [[1, 5]] * nchains # initial positions for all chains
+print("chains shape:", chains.shape)
 
 
-# Properties of the observed data (assumed error: sigma, m: prior, x_obs: observed data values)
-sigma=0.01
-
-x_obs = np.array([0.64704126, 0.61732611])
-
-# Initialize the class
-model = MCSamplingGassmannDet(x_obs, sigma) 
-
-# Initialize MCMC controller
-mcmc = pints.MCMCController(model, nchains, xs, method=pints.MetropolisRandomWalkMCMC)
-
-# Add stopping criterion
-mcmc.set_max_iterations(1000000)
-
-# Run the MCMC sampling
-chains = mcmc.run()
-
-# Define the burn-in period
-burn_in = 1000  # Adjust this value based on your needs
+burn_in = 100000   
+thin = 10         
+save_path = "./src/example/marg/results/mcmc_prob_pmh_time.png"
+out_npy = "./src/example/samples/marg/mcmc_samples_prob_pmh_time.npy"
+m_true = torch.tensor([4.0, 7.0])
 
 
-# Discard the first `burn_in` samples for all chains
-chains = chains[:, burn_in:, :]  # Keep samples after burn-in
+chains = np.asarray(chains)
+if chains.ndim != 3:
+    raise ValueError(f"Expected chains array of shape (n_chains, n_iters, D). Got shape {chains.shape}")
 
-save_path = "src/example/marg/results/mcmc_det.png"
-
-m_true=torch.tensor([4, 7])
-
-samples=np.vstack(chains)
-
-np.save("src/example/samples/mcmc_samples_det.npy",samples)
-
-print(samples.shape)
-
-pairplot(samples, m_true.detach().numpy(), fontsize=15, save_path=save_path)
+n_chains, n_iters, D = chains.shape
+print(f"Raw chains shape: n_chains={n_chains}, n_iters={n_iters}, D={D}")
 
 
+if burn_in >= n_iters:
+    suggested = max(0, int(0.1 * n_iters))
+    warnings.warn(
+        f"Requested burn_in={burn_in} >= n_iters={n_iters}. "
+        f"Setting burn_in to {suggested} (10% of chain length).",
+        UserWarning
+    )
+    burn_in = suggested
+
+post_chains = chains[:, burn_in::thin, :]
+n_post = post_chains.shape[1]
+print(f"Using burn_in={burn_in}, thin={thin} -> post samples per chain = {n_post}")
+
+# Save the samples and plot
+samples = post_chains.reshape(-1, D)   
+print("samples shape (after vstack):", samples.shape)
+
+
+
+np.save(out_npy, samples)
+print(f"Saved samples to {out_npy}")
+
+if D >= 2:
+    pairplot(samples[:, :2], m_true.detach().numpy(), fontsize=15, save_path=save_path)
+else:
+    raise ValueError("Samples have D < 2, cannot call pairplot for 2D.")
+
+end_time = time.perf_counter()
+print(f"Total runtime: {end_time - start_time:.2f} seconds")
