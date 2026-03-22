@@ -19,7 +19,8 @@ from utilities.Histogram2d import pairplot
 from utilities.MCMCFunc import *
 
 
-
+##########################################################################################
+#### Probabilistic version #########
 import time
 start_time = time.perf_counter()
 
@@ -87,6 +88,59 @@ if D >= 2:
     pairplot(samples[:, :2], m_true.detach().numpy(), fontsize=15, save_path=save_path)
 else:
     raise ValueError("Samples have D < 2, cannot call pairplot for 2D.")
+
+
+##########################################################################################
+#### Deterministic version #########
+
+
+#######################################################################################################
+import time
+start_time = time.perf_counter()
+
+# # Initialise the chains
+nchains = 10 # total number of chains
+xs = [[1, 5]] * nchains # initial values for all chains
+
+
+# Set uncertainty and observed data
+sigma=0.01
+
+x_obs = np.array([0.64704126, 0.61732611])
+
+# Initialize the class
+model = MCSamplingGassmannDet(x_obs, sigma) 
+
+# Initialize MCMC controller
+mcmc = pints.MCMCController(model, nchains, xs, method=pints.MetropolisRandomWalkMCMC)
+
+# Add stopping criterion
+mcmc.set_max_iterations(100000)
+
+# Run the MCMC sampling
+chains = mcmc.run()
+
+# Define the burn-in period
+burn_in = 10000  
+
+# Discard the first `burn_in` samples for all chains
+chains = chains[:, burn_in:, :]  # Keep samples after burn-in
+
+save_path = "./src/example/marg/results/mcmc_det_time.png"
+
+m_true=torch.tensor([4, 7])
+
+samples=np.vstack(chains)
+
+np.save("./src/example/samples/marg/mcmc_samples_det_time.npy",samples)
+
+print(samples.shape)
+
+pairplot(samples, m_true.detach().numpy(), fontsize=15, save_path=save_path)
+
+
+end_time = time.perf_counter()
+print(f"Total runtime: {end_time - start_time:.2f} seconds")
 
 end_time = time.perf_counter()
 print(f"Total runtime: {end_time - start_time:.2f} seconds")
