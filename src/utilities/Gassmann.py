@@ -51,6 +51,12 @@ def sample_nuis_parameters_numpy(n_samples):
     rho_grain = np.random.normal(44.8, 0.8, n_samples)  # Rho_grain
     return np.stack([G_frame, porosity, rho_grain], axis=1)
 
+def sample_nuis_parameters_numpy1d(n_samples):
+    G_frame = np.random.normal(8.5, 0.3, n_samples)     # G_frame
+    porosity = np.random.normal(0.37, 0.02, n_samples)  # Porosity
+    rho_grain = np.random.normal(44.8, 0.8, n_samples)  # Rho_grain
+    return np.stack([G_frame, porosity, rho_grain], axis=1)
+
 def sample_nuis_parameters_cuda(n_samples, device='cpu'):
     return torch.stack([
         torch.normal(8.5, 0.3, (n_samples,), device=device),
@@ -90,7 +96,32 @@ def simulator_prob(theta):
     else:
         return np.full((batch_size, 2), np.nan)
 
+def log_prior_theta_vec(m_batch_np):
+    
+    inside = np.all((m_batch_np >= 0.0) & (m_batch_np <= 10.0), axis=1)
+    out = np.full(m_batch_np.shape[0], -np.inf, dtype=np.float32)
+    out[inside] = 0.0
+    return out
 
+
+def simulator_batch_theta_n(theta_batch_t, nuisances_t, obs_dim):
+
+    B = theta_batch_t.shape[0]
+    theta0 = theta_batch_t[:, 0].view(B, 1)                 
+    G = nuisances_t[:, 0].view(1, -1)                       
+    por = nuisances_t[:, 1].view(1, -1)                     
+    rho = nuisances_t[:, 2].view(1, -1)                    
+
+    # Broadcast to (B, M)
+    denominator = theta0 * (1.0 - por) + (por * rho)       
+    valid = denominator > 0.0                              
+
+    denom_safe = torch.where(valid, denominator, torch.ones_like(denominator))
+    sim_scalar = torch.sqrt(G / denom_safe)                
+
+    sims = sim_scalar.unsqueeze(2).expand(-1, -1, obs_dim)  
+
+    return sims, valid
 
 
 import torch
@@ -160,34 +191,25 @@ def simulator_prob_indep(theta, max_attempts=1_000_000):
 
 ##################################################################################
 def simulator_det(x):
-    """
-    Forward model with resampling of parameters until all denominator values > 0.
+    G_frame_values = torch.tensor(
+        [7.994777040351033, 7.997586766477148],
+        device=x.device
+    )
 
-    Args:
-        x (torch.Tensor): Input tensor for the model.
-        max_attempts (int): Maximum attempts to resample valid parameters (unused here but kept for compatibility).
-
-    Returns:
-        torch.Tensor: Synthetic data, with NaN if denominator is invalid.
-    """
-    # Initialize synthetic values
-    synthetic_value = torch.zeros_like(x)  # Placeholder for synthetic values
-
-    # Fixed deterministic parameters
-    G_frame_values = torch.tensor([7.994777040351033, 7.997586766477148], device=x.device)
-    poro = 0.3700000000000001
+    poro = 0.37
     rho_grain = 44.8
 
-    # Iterate over each element in x
-    for i in range(x.size(0)):
-        # Use modulo to wrap around G_frame_values if x has more elements
-        G_frame = G_frame_values[i % len(G_frame_values)]
+    batch_size = x.shape[0]
 
-        # Compute the denominator
-        denominator = (x[i] * (1 - poro)) + (poro * rho_grain)
+    idx = torch.arange(batch_size, device=x.device) % 2
+    G_frame = G_frame_values[idx]  # (batch_size,)
 
+    # 👉 FIX: make it (batch_size, 1)
+    G_frame = G_frame.unsqueeze(1)
 
-        synthetic_value[i] = torch.sqrt(G_frame / denominator)
+    denominator = (x * (1 - poro)) + (poro * rho_grain)
+
+    synthetic_value = torch.sqrt(G_frame / denominator)
 
     return synthetic_value
 
@@ -356,5 +378,4 @@ def simulator_full5(theta):
     # Optionally: mark truly invalid entries as NaN instead of clamping
     # invalid_mask = denominator <= 0
     # sim_data = torch.where(invalid_mask, torch.tensor(float('nan'), device=theta.device), sim_data)
-
     return sim_data  # always defined, shape (batch,2)
