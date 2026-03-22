@@ -1,317 +1,72 @@
 import numpy as np
 import torch
+import torch.distributions.transforms as T
+# Make sure simulator_det is on the same device.
+# If it’s already defined to operate on torch.Tensor→torch.Tensor, great.
+# Otherwise wrap it into a function that returns a torch.Tensor on the correct device.
+import h5py
+import os
+from utilities.NormFlows import *
 
+
+import numpy as np
+import torch
 from scipy.spatial.distance import pdist, squareform
-from utilities.Gassmann import *  
+from utilities.Gassmann import *  # or simulator_prob, as appropriate
 from typing import Tuple
+def lnprob_factory(forward_model, d_obs, sigma, device, prior=None):
+    """
+    Returns a function lnprob(z_np) compatible with sSVGD.
 
+    z_np: unconstrained latent particles, shape (n_particles, 5)
+    returns:
+        logp: (n_particles,)
+        grad: (n_particles, 5)
+        None
+    """
 
-## SVGD and sSVGD implementation based on the vip package (Zhang & Curtis (2023))
-class SVGDGassmannDet:
-    def __init__(self, d_obs: np.ndarray, sigma: float, device: torch.device):
-        """
-        d_obs   : 1D NumPy array of observed data (length = n_data)
-        sigma   : observation noise std (float)
-        device  : torch.device("cuda") or torch.device("cpu")
-        """
-        # Store d_obs and sigma as torch tensors on the correct device
-        self.device = device
-        self.d_obs_torch = torch.tensor(d_obs, dtype=torch.float32, device=device)
-        self.sigma_torch = torch.tensor(sigma, dtype=torch.float32, device=device)
+    d_obs_t = torch.as_tensor(d_obs, dtype=torch.float64, device=device)
 
-    def lnprob(self, theta_np: np.ndarray) -> np.ndarray:
-        """
-        Compute ∇_θ log p(θ | d_obs) for a batch of particles.
-
-        Input:
-          theta_np: NumPy array of shape (n_particles, n_params)
-        Output:
-          grads_np: NumPy array of shape (n_particles, n_params)
-        """
-        # Convert to torch with gradients enabled
-        theta_torch = torch.tensor(theta_np, dtype=torch.float32, device=self.device, requires_grad=True)
-        n_particles, n_params = theta_np.shape
-
-        # 1) Simulate predicted data, shape (n_particles, n_data)
-        d_pred = simulator_det(theta_torch)  # must return a torch.Tensor on same device
-
-        # 2) Compute log-likelihood per particle:
-        #      −½ * Σ_j [ (d_obs[j] − d_pred[j]) / σ ]²
-        diff = (self.d_obs_torch.unsqueeze(0) - d_pred) / self.sigma_torch
-        log_likelihood = -0.5 * torch.sum(diff * diff, dim=1)  # shape: (n_particles,)
-
-        # 3) Compute log-prior: Uniform(0,10) on each θ_i
-        inside_mask = (theta_torch >= 0.0) & (theta_torch <= 10.0)  # (n_particles, n_params)
-        valid_mask = torch.all(inside_mask, dim=1)  # (n_particles,)
-        # log_prior = 0 where valid_mask=True, -inf where False
-        log_prior = torch.where(
-            valid_mask,
-            torch.zeros(n_particles, device=self.device),
-            torch.full((n_particles,), float("-inf"), device=self.device),
-        )
-
-        # 4) Combine to get log-posterior
-        log_posterior = log_likelihood + log_prior  # (n_particles,)
-
-        # 5) Backprop to get gradient for each particle
-        grads = []
-        for i in range(n_particles):
-            # Zero any existing grads
-            if theta_torch.grad is not None:
-                theta_torch.grad.zero_()
-            # Backprop just the i-th log_posterior
-            log_posterior[i].backward(retain_graph=True)
-            grad_i = theta_torch.grad[i].detach().cpu().numpy()  # to NumPy
-            grads.append(grad_i)
-
-        grads_np = np.stack(grads, axis=0)  # shape: (n_particles, n_params)
-        return grads_np
-
-
-    def svgd_kernel(self, theta: np.ndarray, h: float = -1) -> Tuple[np.ndarray, np.ndarray]:
-
-        """
-        Compute RBF kernel matrix K(x_i, x_j) and its ∇_θ K term.
-        theta:   (n_particles, n_params)
-        h < 0:   use median trick for bandwidth
-        Returns: (Kxy [n×n], dxK [n×n_params])
-        """
-        sq_dist = pdist(theta)
-        pairwise_dists = squareform(sq_dist) ** 2
-
-        if h < 0:
-            m = np.median(pairwise_dists)
-            h = np.sqrt(0.5 * m / np.log(theta.shape[0] + 1 + 1e-16))
-
-        Kxy = np.exp(-pairwise_dists / (h ** 2) / 2)  # (n×n)
-        dxK = -Kxy.dot(theta)  # broadcast (n×n)·(n×p) → (n×p)
-        sumK = np.sum(Kxy, axis=1)  # (n,)
-
-        # add θ_i * Σ_j K_{ij} for each dimension
-        for dim_i in range(theta.shape[1]):
-            dxK[:, dim_i] += theta[:, dim_i] * sumK
-
-        dxK = dxK / (h ** 2)
-        return Kxy, dxK
-
-
-    def update(
-        self,
-        x0: np.ndarray,
-        n_iter: int = 2000,
-        stepsize: float = 1e-3,
-        bandwidth: float = -1,
-        alpha: float = 0.9,
-        fudge: float = 1e-6,
-        debug: bool = False,
-        track_history: bool = False,
-    ) -> np.ndarray:
-        theta = x0.copy()  # (n_particles, n_params)
-        history = []
-
-        # If you want the initial state included:
-        if track_history:
-            history.append(theta.copy())
-
-        historical_grad = np.zeros_like(theta)
-        for it in range(n_iter):
-            if debug and (it + 1) % 100 == 0:
-                print(f"SVGD iter {it+1}/{n_iter}")
-
-            grad_logp = self.lnprob(theta)                # (n_particles, n_params)
-            Kxy, dxK = self.svgd_kernel(theta, h=bandwidth)
-            phi = (Kxy.dot(grad_logp) + dxK) / theta.shape[0]
-
-            if it == 0:
-                historical_grad = phi ** 2
-            else:
-                historical_grad = alpha * historical_grad + (1 - alpha) * (phi ** 2)
-
-            adj_grad = phi / (fudge + np.sqrt(historical_grad))
-            theta = theta + stepsize * adj_grad
-
-            if track_history:
-                history.append(theta.copy())
-
-        if track_history:
-            # Return a NumPy array of shape (n_iter+1, n_particles, n_params)
-            return np.stack(history, axis=0)
+    def lnprob(z_np):
+        # Accept numpy or torch input
+        if isinstance(z_np, np.ndarray):
+            z = torch.as_tensor(z_np, dtype=torch.float64, device=device)
         else:
-            # Return only final particles of shape (n_particles, n_params)
-            return theta
-        
+            z = z_np.to(device=device, dtype=torch.float64)
 
+        z = z.clone().detach().requires_grad_(True)
 
+        # Transform latent -> physical parameters
+        # Use the transform that matches your 5D setup
+        theta, log_det = batch_constrained_transform(z)
 
+        # Forward model
+        pred = forward_model(theta)
 
+        # Make sure shapes are (batch, 2)
+        if pred.ndim == 1:
+            pred = pred.unsqueeze(0)
 
-class SVGDGassmannProb:
-    def __init__(self, d_obs: np.ndarray, sigma: float, device: torch.device):
-        """
-        d_obs   : 1D NumPy array of observed data (length = n_data).
-        sigma   : observation noise std (float).
-        device  : torch.device("cuda") or torch.device("cpu").
-        """
-        self.device = device
-        self.d_obs_torch = torch.tensor(d_obs, dtype=torch.float32, device=device)
-        self.sigma_torch = torch.tensor(sigma, dtype=torch.float32, device=device)
+        resid = pred - d_obs_t
+        log_likelihood = -0.5 * torch.sum((resid / sigma) ** 2, dim=1)
 
-    def lnprob(self, theta_np: np.ndarray) -> np.ndarray:
-        """
-        Compute ∇_θ log p(θ | d_obs) for a batch of particles, using one
-        nuisance draw m ~ p(m) per θ‐particle.
-
-        Input:
-          theta_np: NumPy array, shape = (n_particles, n_theta).
-        Output:
-          grads_np: NumPy array, shape = (n_particles, n_theta).
-        """
-        # 1) Convert to torch with requires_grad
-        theta_torch = torch.tensor(
-            theta_np, dtype=torch.float32, device=self.device, requires_grad=True
-        )
-        n_particles, n_theta = theta_np.shape
-
-        # 2) Sample one set of nuisance parameters m per θ-particle (NumPy → torch)
-        #    sample_nuis_parameters_numpy returns shape (n_particles, n_m)
-        m_np = sample_nuis_parameters_numpy(n_particles)  # shape = (n_particles, n_m)
-        m_torch = (
-            torch.tensor(m_np, dtype=torch.float32, device=self.device).detach()
-        )
-
-        # 3) Simulate d_pred = f(θ, m)
-        #    Expect shape (n_particles, n_data)
-        d_pred,n = simulator_prob(theta_torch)
-
-        # 4) Log-likelihood:  -0.5 * Σ_j [ (d_obs[j] − d_pred[j]) / σ ]²
-        diff = (self.d_obs_torch.unsqueeze(0) - d_pred) / self.sigma_torch
-        log_likelihood = -0.5 * torch.sum(diff * diff, dim=1)  # (n_particles,)
-
-        # 5) Log‐prior on θ: Uniform(0,10) for each θ_i
-        inside_mask = (theta_torch >= 0.0) & (theta_torch <= 10.0)
-        valid_mask = torch.all(inside_mask, dim=1)  # (n_particles,)
-        log_prior_theta = torch.where(
-            valid_mask,
-            torch.zeros(n_particles, device=self.device),
-            torch.full((n_particles,), float("-inf"), device=self.device),
-        )
-
-        # 6) Log‐prior on m:  Normal(8.5,0.3) × Normal(0.37,0.02) × Normal(44.8,0.8)
-        #    Each m_torch[i] = [G_frame, poro, rho_grain]
-        #    => log p(m[i]) = sum of ℓ = −0.5*((m−μ)/σ)²  (ignoring constants)
-        mu = torch.tensor([8.5, 0.37, 44.8], device=self.device)
-        sd = torch.tensor([0.3, 0.02, 0.8], device=self.device)
-        diff_m = (m_torch - mu) / sd  # shape: (n_particles, 3)
-        log_prior_m = -0.5 * torch.sum(diff_m * diff_m, dim=1)  # (n_particles,)
-
-        # 7) Combine to get log‐posterior for each particle
-        log_post = log_likelihood + log_prior_theta + log_prior_m  # shape: (n_particles,)
-
-        # 8) Compute ∇_θ[log_post] per particle
-        grads = []
-        for i in range(n_particles):
-            if theta_torch.grad is not None:
-                theta_torch.grad.zero_()
-            log_post[i].backward(retain_graph=True)
-            grad_i = theta_torch.grad[i].detach().cpu().numpy()  # (n_theta,)
-            grads.append(grad_i)
-
-        grads_np = np.stack(grads, axis=0)  # (n_particles, n_theta)
-        return grads_np
-
-    def svgd_kernel(self, theta: np.ndarray, h: float = -1) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Compute RBF kernel matrix K and its ∇_θ K term for SVGD update.
-
-        theta: (n_particles, n_theta)
-        h < 0: use median trick to choose bandwidth
-        Returns:
-          Kxy : (n_particles, n_particles)
-          dxK : (n_particles, n_theta)
-        """
-        sq_dist = pdist(theta)
-        pairwise_dists = squareform(sq_dist) ** 2
-
-        if h < 0:
-            m = np.median(pairwise_dists)
-            h = np.sqrt(0.5 * m / np.log(theta.shape[0] + 1 + 1e-16))
-
-        Kxy = np.exp(-pairwise_dists / (h**2) / 2)  # (n,n)
-        dxK = -Kxy.dot(theta)                       # (n,n_theta)
-        sumK = np.sum(Kxy, axis=1)                  # (n,)
-
-        # Add θ_i * Σ_j K_{ij} for each parameter dimension
-        for dim_i in range(theta.shape[1]):
-            dxK[:, dim_i] += theta[:, dim_i] * sumK
-
-        dxK = dxK / (h**2)
-        return Kxy, dxK
-
-    def update(
-        self,
-        x0: np.ndarray,
-        n_iter: int = 2000,
-        stepsize: float = 1e-3,
-        bandwidth: float = -1,
-        alpha: float = 0.9,
-        fudge: float = 1e-6,
-        debug: bool = False,
-        track_history: bool = False,
-    ) -> np.ndarray:
-        """
-        Run SVGD for `n_iter` iterations, starting from initial particles x0.
-
-        x0:         (n_particles, n_theta) initial θ samples (NumPy).
-        n_iter:     number of SVGD update steps.
-        stepsize:   step size for each update.
-        bandwidth:  RBF kernel bandwidth h; if < 0, median trick is used.
-        alpha:      momentum for AdaGrad.
-        fudge:      small constant for numerical stability in AdaGrad.
-        debug:      if True, prints progress every 100 iterations.
-        track_history: if True, returns an array of shape
-                       (n_iter+1, n_particles, n_theta), otherwise (n_particles, n_theta).
-
-        Returns:
-          If track_history=False:  (n_particles, n_theta) final θ samples.
-          If track_history=True:   (n_iter+1, n_particles, n_theta) all θ at each iteration.
-        """
-        theta = x0.copy()  # (n_particles, n_theta)
-        history = []
-
-        if track_history:
-            history.append(theta.copy())
-
-        historical_grad = np.zeros_like(theta)
-        for it in range(n_iter):
-            if debug and ((it + 1) % 100 == 0):
-                print(f"SVGD iter {it+1}/{n_iter}")
-
-            # 1) ∇_θ log p(θ|d_obs) for each particle
-            grad_logp = self.lnprob(theta)  # (n_particles, n_theta)
-
-            # 2) Compute kernel matrix and ∇_θ K
-            Kxy, dxK = self.svgd_kernel(theta, h=bandwidth)
-
-            # 3) SVGD direction
-            phi = (Kxy.dot(grad_logp) + dxK) / theta.shape[0]
-
-            # 4) AdaGrad‐style scaling
-            if it == 0:
-                historical_grad = phi**2
-            else:
-                historical_grad = alpha * historical_grad + (1 - alpha) * (phi**2)
-
-            adj_grad = phi / (fudge + np.sqrt(historical_grad))
-            theta = theta + stepsize * adj_grad
-
-            if track_history:
-                history.append(theta.copy())
-
-        if track_history:
-            return np.stack(history, axis=0)
+        # Optional prior in physical space
+        if prior is None:
+            log_prior = torch.zeros_like(log_likelihood)
         else:
-            return theta
+            log_prior = prior(theta)
 
+        logp = log_likelihood + log_det + log_prior
+
+        grad = torch.autograd.grad(logp.sum(), z, retain_graph=False, create_graph=False)[0]
+
+        return (
+            logp.detach().cpu().numpy(),
+            grad.detach().cpu().numpy(),
+            None
+        )
+
+    return lnprob
 
 
 class sSVGDGassmannProb:
@@ -554,135 +309,486 @@ class sSVGDGassmannDet:
 
 
 
+import numpy as np
+from scipy.spatial.distance import pdist, squareform
 
+import numpy as np
+from scipy.spatial.distance import pdist, squareform
 
-class FullsSVGD:
-    def __init__(self, d_obs: np.ndarray, sigma: float, device: torch.device):
-        self.device        = device
-        # observed data
-        self.d_obs_torch   = torch.tensor(d_obs, dtype=torch.float32, device=device)
-        # known noise std
-        self.sigma_torch   = torch.tensor(sigma, dtype=torch.float32, device=device)
+def svgd_grad(x, grad, kernel='rbf', w=None, h=1.0, chunks=None):
+    """
+    Replacement svgd_grad: computes kernel matrix kxy and SVGD gradient sgrad directly.
 
-        # latent prior hyper-parameters
-        self.latent_mu     = torch.tensor([8.5, 0.37, 44.8], dtype=torch.float32, device=device)
-        self.latent_sd     = torch.tensor([0.3, 0.02, 0.8], dtype=torch.float32, device=device)
+    Inputs
+      x      - 2D array of particles (n, d)
+      grad   - 2D array of gradients of logp (n, d)
+      kernel - 'rbf' supported (diagonal not implemented here)
+      w      - 1D vector of weights for dimensions (length d)
+      h      - bandwidth multiplier (fraction of median-trick bandwidth)
+      chunks - tuple-like (nparticles, chunk_dim); if None defaults to x.shape
 
-    def lnprob(self, theta_np: np.ndarray) -> np.ndarray:
-        """
-        Returns ∇_θ log p(θ | d_obs) for each θ‐particle in `theta_np`.
-        """
-        theta = torch.tensor(theta_np,
-                            dtype=torch.float32,
-                            device=self.device,
-                            requires_grad=True)  # (N,D)
+    Outputs
+      kxy    - kernel matrix (n, n)
+      sgrad  - SVGD gradient for each particle (n, d)
+    """
 
-        # 2) simulate forward
-        d_pred = simulator_full5(theta)  # -> (N, len(d_obs))
+    n, d = x.shape
 
-        # 3) log‐likelihood
-        diff = (self.d_obs_torch.unsqueeze(0) - d_pred) / self.sigma_torch
-        log_like = -0.5 * torch.sum(diff**2, dim=1)  # (N,)
+    if w is None:
+        w = np.ones((d,), dtype=x.dtype)
+    if chunks is None:
+        chunks = x.shape  # (n, d)
 
-        # 4) uniform prior on first two dims
-        in_bounds = ((theta[:, :2] >= 0.0) & (theta[:, :2] <= 10.0)).all(dim=1)
-        log_prior_unif = torch.where(in_bounds,
-                                    torch.zeros_like(log_like),
-                                    torch.full_like(log_like, float("-inf")))
+    # --- 1) compute weighted pairwise squared distances (condensed) in chunks ---
+    dist_condensed = None  # will be length n*(n-1)/2
 
-        # 5) Gaussian prior on last three
-        latent = theta[:, -3:]
-        diff_latent = (latent - self.latent_mu) / self.latent_sd
-        log_prior_latent = -0.5 * torch.sum(diff_latent**2, dim=1)  # (N,)
-
-        # 6) total log‐posterior
-        log_post = log_like + log_prior_unif + log_prior_latent  # (N,)
-
-        # 7) **one** autograd call for the **full** Jacobian:
-        #    grad_outputs[i] picks out d log_post[i]/d theta so we get an (N,D) tensor back.
-        grads = torch.autograd.grad(
-            outputs    = log_post,
-            inputs     = theta,
-            grad_outputs=torch.ones_like(log_post),
-            create_graph=False,
-            retain_graph=False
-        )[0]  # a (N,D) tensor
-
-        return grads.cpu().numpy()
-    
-    def svgd_kernel(self, theta: np.ndarray, h: float = -1) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Standard RBF kernel + its ∇ w.r.t. θ.
-        Returns Kxy (n×n) and dxK (n×n_theta).
-        """
-        sq_dist = pdist(theta)
-        pairwise_dists = squareform(sq_dist) ** 2
-
-        if h < 0:
-            m = np.median(pairwise_dists)
-            h = np.sqrt(0.5 * m / np.log(theta.shape[0] + 1 + 1e-16))
-
-        Kxy = np.exp(-pairwise_dists / (h**2) / 2)
-        dxK = -Kxy.dot(theta)
-        sumK = np.sum(Kxy, axis=1)
-
-        for d in range(theta.shape[1]):
-            dxK[:, d] += theta[:, d] * sumK
-
-        dxK = dxK / (h**2)
-        return Kxy, dxK
-
-    def update(
-        self,
-        x0: np.ndarray,
-        n_iter: int = 2000,
-        stepsize: float = 1e-3,
-        bandwidth: float = -1,
-        alpha: float = 0.9,
-        fudge: float = 1e-6,
-        debug: bool = False,
-        track_history: bool = False,
-    ) -> np.ndarray:
-        """
-        Run full‐batch SVGD for n_iter steps over all `N = x0.shape[0]` particles.
-        Returns either the final (N, n_theta) or, if track_history=True, the full history:
-          (n_iter+1, N, n_theta).
-        """
-        theta = x0.copy()
-        history = []
-        if track_history:
-            history.append(theta.copy())
-
-        historical_grad = np.zeros_like(theta)
-        for it in range(n_iter):
-            if debug and (it + 1) % 100 == 0:
-                print(f"SVGD iter {it+1}/{n_iter}")
-
-            # 1) ∇_θ log p(θ|d) over **all** N particles
-            grad_logp = self.lnprob(theta)                 # (N, n_theta)
-
-            # 2) Full‐batch kernel on all N particles
-            Kxy, dxK = self.svgd_kernel(theta, h=bandwidth)
-
-            # 3) φ = (K⋅∇logp + dxK) / N
-            phi = (Kxy.dot(grad_logp) + dxK) / theta.shape[0]
-
-            # 4) AdaGrad‐style
-            if it == 0:
-                historical_grad = phi**2
-            else:
-                historical_grad = alpha * historical_grad + (1 - alpha) * (phi**2)
-
-            adj_grad = phi / (fudge + np.sqrt(historical_grad))
-            theta = theta + stepsize * adj_grad
-
-            if track_history:
-                history.append(theta.copy())
-
-        if track_history:
-            return np.stack(history, axis=0)
+    # Use chunking so we don't need to materialize x*sqrt(w) for all dims at once if d large
+    chunk_width = chunks[1]
+    for i in range(0, d, chunk_width):
+        end = min(i + chunk_width, d)
+        xs = np.ascontiguousarray(x[:, i:end])        # (n, chunk_w)
+        ws = np.ascontiguousarray(w[i:end])           # (chunk_w,)
+        # scale dims by sqrt(weight) to implement weighted squared distance
+        xs_w = xs * np.sqrt(ws[np.newaxis, :])
+        chunk_dist = pdist(xs_w, metric="sqeuclidean")  # condensed squared distances
+        if dist_condensed is None:
+            dist_condensed = chunk_dist
         else:
-            return theta
+            # accumulate (pdist condensed vectors must have same length)
+            dist_condensed = dist_condensed + chunk_dist
+
+    if dist_condensed is None:
+        # fallback (shouldn't happen unless d == 0)
+        dist_condensed = np.zeros((n * (n - 1)) // 2, dtype=x.dtype)
+
+    # --- 2) median trick bandwidth ---
+    medh = np.median(dist_condensed)
+    # guard against zero median
+    if medh <= 0:
+        medh = 1.0
+    medh = np.sqrt(0.5 * medh / np.log(n + 1.0))
+    h_actual = h * medh if h > 0 else medh
+
+    # --- 3) kernel matrix K (square form) ---
+    # note: dist_condensed are squared distances
+    K_cond = np.exp(-dist_condensed / (2.0 * (h_actual ** 2)))
+    K = squareform(K_cond)     # (n,n)
+    np.fill_diagonal(K, 1.0)
+
+    # --- 4) compute SVGD gradient (vectorized) ---
+    # Term A: K @ grad  (n,d)
+    A = K.dot(grad)            # (n, d)
+
+    # Term B: gradient of kernel sum:
+    # For RBF: grad_{x_j} k(x_j, x_i) = -1/h^2 * k_ji * (x_j - x_i)
+    # Summing over j gives: B_i = sum_j grad_{x_j} k(x_j, x_i)
+    # We compute: S = K @ X  (n,d), and row_sum = sum_j K_ij
+    row_sum = np.sum(K, axis=1)              # (n,)
+    S = K.dot(x)                             # (n,d)
+    # B = -1/h^2 * ( S - x * row_sum[:,None] )
+    scalar = -1.0 / (h_actual ** 2)
+    B = scalar * (S - x * row_sum[:, None])  # (n,d)
+
+    # Combine and normalise by n (as in SVGD estimator)
+    sgrad = (A + B) / float(n)
+
+    return K, sgrad
 
 
+def batch_constrained_transform2d(w):
+    """
+    w: (batch_size, 2)   latent from N(0,1)
+    returns:
+      theta: (batch_size, 2)  in mixed constrained space
+      log_det: (batch_size,)  log |det d w→θ|
+    """
+    batch_size = w.shape[0]
+    device = w.device
 
+    # 1) Uniform[0,10] for dims 0,1
+    sigmoid = T.SigmoidTransform()  # maps ℝ → (0,1)
+    u = sigmoid(w)           # shape (batch,2)
+    theta_u = u * 10.0              # shape (batch,2)
+    # log-det from sigmoid:
+    ld_sig = sigmoid.log_abs_det_jacobian(w, u).sum(dim=1)
+    # extra log-det from multiplying by 10:
+    ld_scale_u = 2 * torch.log(torch.tensor(10.0, device=device))
+
+
+    # assemble θ and log_det
+    theta = torch.cat([theta_u], dim=1)
+    log_det = ld_sig + ld_scale_u 
+
+    return theta, log_det
+
+
+class sSVGD():
+    '''
+    A class that implements stochastic SVGD algorithm.
+    '''
+    def __init__(self, lnprob, kernel='rbf', h=1.0, mask=None, threshold=0.02,
+                 weight='grad', out='samples.hdf5'):
+        '''
+        lnprob: log of the probability density function, usually negtive misfit function
+        kernel: kernel function, including rbf and diagonal matrix kernel
+        h:  bandwith for rbf kernel function, is a frac of median trick bandwith.
+            h is positive, actual bandwith is h*medh
+        weight: method of coonstructing diagonal matrix, 'var' using variance of each parameters across particles,
+            'grad' using 1/sqrt(grad**2) similar as in adagrad, 'delta' using sqrt(dg**2)/sqrt(dm**2)
+        mask: mask array where the variables are fixed, i.e. the gradient is zero, default no mask
+        out: hdf5 file that stores final particles
+
+        '''
+
+        self.h = h
+        self.lnprob = lnprob
+        self.kernel = kernel
+        self.mask = mask
+        self.out = out
+        self.threshold = threshold
+        self.weight = weight
+        if(kernel=='rbf'):
+            self.weight = 'constant'
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    def sample(self, x0, n_iter=1000, metropolis=False, stepsize=1e-2, gamma=1.0, decay_step=1,
+               burn_in=100, thin=2, alpha=0.9, beta=0.95, chunks=None, optimizer=None):
+        '''
+        Using ssvgd to sample a probability density function
+        Input
+            x0: initial value, shape (n,dim)
+            n_iter: number of iterations
+            metropolis: If true, use metropolis-hastings adjust. This is more accurate, but usually requires very small
+                        stepsize, which means more computational cost
+            stepsize: stepsize for each iteration
+            gamma: decaying rate for stepsize
+            decay_step: the number of steps to decay the stepsize
+            burn_in: burn_in period
+            thin: thining of the chain
+            alpha, beta: hyperparameter for sgd and adam, for sgd only alpha is ued
+            chunks: chunks of theta for calculation, default theta.shape
+        Return
+            losses: loss value for each iterations, shape (n_iter,n)
+            The final particles are stored at the hdf5 file specified by self.out, so no return samples
+        '''
+
+        # Check input
+        if x0 is None :
+            raise ValueError('x0 cannot be None!')
+
+        if(chunks is None):
+            chunks = x0.shape
+
+        # create a hdf5 file to store samples on disk
+        nsamples = int((n_iter-burn_in)/thin)
+        if(not os.path.isfile(self.out)):
+            f = h5py.File(self.out,'a')
+            samples = f.create_dataset('samples',(nsamples,x0.shape[0],x0.shape[1]),
+                                       maxshape=(None,x0.shape[0],x0.shape[1]),
+                                       compression="gzip", chunks=True)
+        else:
+            f = h5py.File(self.out,'a')
+            f['samples'].resize((f['samples'].shape[0]+nsamples),axis=0)
+            samples = f['samples']
+
+        # sampling
+        if(metropolis):
+            losses, theta = self.ma_sample(x0, samples, n_iter=n_iter, stepsize=stepsize, gamma=gamma, decay_step=decay_step,
+               burn_in=burn_in, thin=thin, alpha=alpha, beta=beta, chunks=chunks, optimizer=optimizer)
+        else:
+            losses, theta = self.pl_sample(x0, samples, n_iter=n_iter, stepsize=stepsize, gamma=gamma, decay_step=decay_step,
+               burn_in=burn_in, thin=thin, alpha=alpha, beta=beta, chunks=chunks, optimizer=optimizer)
+
+        # close hdf5 file
+        f.close()
+
+        return losses, theta
+
+    def grad(self, theta, mkernel=None, chunks=None):
+        '''
+        Compute gradients for ssvgd update
+        Input
+            theta: the current value of variable (transformed), shape (n,dim)
+            mkernel: the vector of the diagonal matrix with length dim, if using a diagonal matrix kernel
+            chunks: chunks of theta for calculation, default theta.shape
+        Return
+            logp: log posterior pdf value across particles
+            sgrad: svgd gradients for each particles, shape (n,dim)
+            kxy: kernel matrix, shape (n,n)
+        '''
+
+        if(mkernel is None):
+            mkernel = np.full((theta.shape[1],),fill_value=1.0)
+
+        logp, grad, _ = self.lnprob(theta)
+        kxy, sgrad = svgd_grad(theta, grad, kernel=self.kernel, w=mkernel, h=self.h, chunks=chunks)
+        print(f'max, mean, median, and min grads for svgd: {np.max(abs(sgrad))} {np.mean(abs(sgrad))} {np.median(abs(sgrad))} {np.min(abs(sgrad))}')
+
+        return logp, sgrad, kxy
+
+    def update(self, theta, step=1e-3, mkernel=None, chunks=None):
+        '''
+        Compute gradients for ssvgd update
+        Input
+            theta: the current value of variable (transformed), shape (n,dim)
+            mkernel: the vector of the diagonal matrix with length dim, if using a diagonal matrix kernel
+            chunks: chunks of theta for calculation, default theta.shape
+        Return
+            update_step: update at each iteration
+            loss: mean loss value across particles
+            grad: svgd gradients for each particles, shape (n,dim)
+        '''
+
+        if(mkernel is None):
+            mkernel = np.full((theta.shape[1],),fill_value=1.0)
+
+        # get svgd gradient and kernel matrix K
+        logp, sgrad, kxy = self.grad(theta, mkernel=mkernel, chunks=chunks)
+
+        # calculate cholesky decomposition of kernel matrix K and generate random variable
+        cholK = np.linalg.cholesky(2*kxy/theta.shape[0])
+        random_update = np.sqrt(1./mkernel)*np.matmul(cholK,np.random.normal(size=theta.shape))
+
+        update_step = step*sgrad + np.sqrt(step)*random_update
+        if(self.mask is not None):
+            update_step[:,self.mask] = 0
+
+        return update_step, logp, sgrad
+
+    def pl_sample(self, x0, samples, n_iter=1000, stepsize=1e-2, gamma=1.0, decay_step=1,
+               burn_in=100, thin=2, alpha=0.9, beta=0.95, chunks=None, optimizer=None):
+        '''
+        Using ssvgd to sample a probability density function
+        Input
+            x0: initial value, shape (n,dim)
+            n_iter: number of iterations
+            stepsize: stepsize for each iteration
+            gamma: decaying rate for stepsize
+            decay_step: the number of steps to decay the stepsize
+            burn_in: burn_in period
+            thin: thining of the chain
+            alpha, beta: hyperparameter for sgd and adam, for sgd only alpha is ued
+            chunks: chunks of theta for calculation, default theta.shape
+        Return
+            losses: loss value for each iterations, shape (n_iter,n)
+            The final particles are stored at the hdf5 file specified by self.out, so no return samples
+        '''
+
+        # Check input
+        if x0 is None :
+            raise ValueError('x0 cannot be None!')
+
+        if(chunks is None):
+            chunks = x0.shape
+
+        theta = np.copy(x0).astype(np.float64)
+        losses = np.zeros((n_iter,x0.shape[0]))
+
+        # initialise some variables
+        nsamples = int((n_iter-burn_in)/thin)
+        sample_count = 0
+        prev_grad = np.zeros(x0.shape,dtype=np.float64)
+        prev_theta = np.zeros(x0.shape,dtype=np.float64)
+        mkernel = np.full((theta.shape[1],),fill_value=1.0, dtype=np.float64)
+        w = weight(dim=theta.shape[1], approx=self.weight, threshold=self.threshold)
+
+        # sampling
+        for i in range(n_iter):
+
+            # start a new iteration
+            print(f'Iteration: {i}')
+            #print(f'max, mean, median and min kernel: {np.max(abs(mkernel))} {np.mean(abs(mkernel))} {np.median(abs(mkernel))} {np.min(abs(mkernel))}')
+            print(f'max, mean, median and min theta: {np.max(abs(theta))} {np.mean(abs(theta))} {np.median(abs(theta))} {np.min(abs(theta))}')
+            update_step, logp, pgrad = self.update(theta, step=stepsize, mkernel=mkernel, chunks=chunks)
+
+            mkernel = w.diag(theta, prev_theta, pgrad, prev_grad)
+            prev_grad = np.copy(pgrad)
+            prev_theta = np.copy(theta)
+
+            theta = theta + update_step
+            losses[i,:] = -logp
+            #print('Average loss: '+str(np.mean(-logp)))
+
+            # decay the stepsize if required
+            if((i+1)%decay_step == 0):
+                stepsize = stepsize * gamma
+
+            # after burn_in then collect samples
+            if(i>=burn_in and (i-burn_in)%thin==0):
+                samples[-nsamples+sample_count,:,:] = np.copy(theta)
+                sample_count += 1
+
+        return losses, theta
+
+    def ma_sample(self, x0, samples, n_iter=1000, stepsize=1e-2, gamma=1.0, decay_step=1,
+               burn_in=100, thin=2, alpha=0.9, beta=0.95, chunks=None, optimizer=None):
+        '''
+        Using ssvgd to sample a probability density function
+        Input
+            x0: initial value, shape (n,dim)
+            n_iter: number of iterations
+            stepsize: stepsize for each iteration
+            gamma: decaying rate for stepsize
+            decay_step: the number of steps to decay the stepsize
+            burn_in: burn_in period
+            thin: thining of the chain
+            alpha, beta: hyperparameter for sgd and adam, for sgd only alpha is ued
+            chunks: chunks of theta for calculation, default theta.shape
+        Return
+            losses: mean loss value for each iterations, vector of length n
+            The final particles are stored at the hdf5 file specified by self.out, so no return samples
+        '''
+
+        # Check input
+        if x0 is None :
+            raise ValueError('x0 cannot be None!')
+
+        if(chunks is None):
+            chunks = x0.shape
+
+        theta = np.copy(x0).astype(np.float64)
+        losses = np.zeros((n_iter,x0.shape[0]))
+
+        # initialise some variables
+        nsamples = int((n_iter-burn_in)/thin)
+        sample_count = 0; accepted_count = 0
+        mkernel = np.full((theta.shape[1],),fill_value=1.0, dtype=np.float64)
+        logp, sgrad, kxy = self.grad(theta, mkernel=mkernel, chunks=chunks)
+        cholK = np.linalg.cholesky(kxy/theta.shape[0])
+
+        # save computed info for the current model
+        prev_logp = logp
+        prev_grad = sgrad
+        prev_kxy = kxy
+        prev_cholK = cholK
+        prev_theta = theta
+
+        # sampling
+        for i in range(n_iter):
+
+            # start a new iteration
+            print(f'Iteration: {i}')
+            print(f'max, mean, median and min theta: {np.max(abs(theta))} {np.mean(abs(theta))} {np.median(abs(theta))} {np.min(abs(theta))}')
+
+            # update on the current model
+            random_update = np.sqrt(1./mkernel)*np.matmul(cholK,np.random.normal(size=theta.shape))
+            update_step = stepsize*sgrad + np.sqrt(2*stepsize)*random_update
+            if(self.mask is not None):
+                update_step[:,self.mask] = 0
+
+            # update theta
+            theta = theta + update_step
+
+            # compute forward proposal pdf q(theta_k+1|theta_k)
+            update = theta - prev_theta - stepsize*sgrad # masked variables have no effect on proposal pdf
+            pvar = sla.solve_triangular(cholK,update)
+            forward_plogp = -0.25/stepsize*np.sum(pvar.flatten()**2) - 0.5*sla.det(2*stepsize*kxy/theta.shape[0]) - 0.5*pvar.flatten().size*np.log(2*np.pi)
+
+            # compute info for updated theta
+            logp, sgrad, kxy = self.grad(theta, mkernel=mkernel, chunks=chunks)
+
+            # compute reverse proposal pdf q(theta_k|theta_k+1)
+            cholK = np.linalg.cholesky(kxy/theta.shape[0])
+            reverse_update = prev_theta - theta - stepsize*sgrad
+            pvar = sla.solve_triangular(cholK,reverse_update)
+            reverse_plogp = -0.25/stepsize*np.sum(pvar.flatten()**2) - 0.5*sla.det(2*stepsize*kxy/theta.shape[0]) - 0.5*pvar.flatten().size*np.log(2*np.pi)
+
+            # compute acceptance ratio
+            acceptance_ratio = np.sum(logp) + reverse_plogp - ( np.sum(prev_logp) + forward_plogp )
+            print(f'log pdf change: {np.sum(logp-prev_logp)} {reverse_plogp-forward_plogp}')
+            acceptance_ratio = min(0,acceptance_ratio)
+
+            if( np.log(np.random.uniform()) < acceptance_ratio ):
+                # update previously save info if accepted
+                prev_theta = theta
+                prev_logp = logp
+                prev_grad = sgrad
+                prev_kxy = kxy
+                prev_cholK = cholK
+                accepted_count = accepted_count + 1
+            else:
+                # recover info if rejected
+                theta = prev_theta
+                kxy = prev_kxy
+                cholK = prev_cholK
+                logp = prev_logp
+                sgrad = prev_grad
+
+
+            losses[i,:] = -logp
+            print(f'Real time and total acceptance rate: {np.exp(acceptance_ratio)} {accepted_count*1.0/(i+1)}')
+
+            # decay the stepsize if required
+            if((i+1)%decay_step == 0):
+                stepsize = stepsize * gamma
+
+            # after burn_in then collect samples
+            if(i>=burn_in and (i-burn_in)%thin==0):
+                samples[-nsamples+sample_count,:,:] = np.copy(theta)
+                sample_count += 1
+
+        return losses, theta
+
+class weight():
+    '''
+    A class that generates a weigting vector for kernel functions
+    '''
+
+    def __init__(self, dim=100, approx='grad', alpha=0.95, beta=0.9,
+                 quantile=0.8, threshold=0.02):
+
+        self.dm = np.zeros((dim,),dtype=np.float64)
+        self.dg = np.zeros((dim,),dtype=np.float64)
+        self.approx = approx
+        self.kernel = np.full((dim,),fill_value=1.0,dtype=np.float64)
+        self.alpha = alpha
+        self.beta = beta
+        self.quantile = quantile
+        self.threshold = threshold
+
+    def diag(self, cm, pm, cg, pg, eps=1E-5):
+
+        if(self.approx=='constant'):
+            pass
+
+        elif(self.approx=='var'):
+            kernel = 1/(np.var(cm,axis=0)+eps)
+            kernel[kernel<self.threshold] = self.threshold
+            kernel = kernel/np.quantile(kernel,self.quantile)
+            self.kernel = kernel
+
+        elif(self.approx=='bfgs'):
+            invH = 1./self.kernel
+            dg = cg - pg
+            dx = cm - pm
+            rho = 1./np.sum(dx*dg,axis=1)
+            gh = np.sum(dg**2*invH, axis=1)
+            kernel = (rho**2*gh+rho)*dx**2 + invH - 2*rho*dx*dg*invH
+            kernel = 1./kernel
+            self.kernel = np.sqrt(np.mean(kernel**2,axis=0))
+
+        elif(self.approx=='delta'):
+            self.dm = (1-self.alpha)*self.dm + self.alpha*np.mean((cm - pm)**2,axis=0)
+            self.dg = (1-self.alpha)*self.dg + self.alpha*np.mean((cg - pg)**2,axis=0)
+            kernel = self.dg/(self.dm+eps)
+            kernel = np.sqrt(kernel)
+            kernel = kernel/np.quantile(kernel,self.quantile)
+            kernel[kernel<self.threshold] = self.threshold
+            self.kernel = kernel
+
+        elif(self.approx=='grad'):
+            self.dg = (1-self.alpha)*np.mean(cg**2,axis=0) + self.alpha*self.dg
+            kernel = np.sqrt(self.dg)
+            #kernel = kernel/np.quantile(kernel,self.quantile)
+            kernel[kernel<self.threshold] = self.threshold
+            self.kernel = kernel
+
+        elif(self.approx=='adam'):
+            self.dm = (1-self.alpha)*cg + self.alpha*self.dm
+            self.dg = (1-self.beta)*cg**2 + self.beta*self.dg
+            kernel = np.mean(self.dg,axis=0)/np.mean(np.abs(self.dm)+eps,axis=0)
+            kernel = kernel/np.quantile(kernel,self.quantile)
+            kernel[kernel<self.threshold] = self.threshold
+            self.kernel = kernel
+
+        return self.kernel
