@@ -12,20 +12,14 @@ import math
 import matplotlib.pyplot as plt
 import normflows as nf
 from tqdm import tqdm
-import os
-import numpy as np
 from utilities.NormFlows import *
-
-
-import os
-import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm import tqdm
-import normflows as nf  
-from utilities.Gassmann import simulator_full5, sample_and_log_gaussians
+from utilities.Gassmann import simulator_full5, sample_and_log_gaussians  # Or simulator_det
 from utilities.PlotHighD import plot_5d_corner
 
+import time
+start_time = time.perf_counter()
 # Device configuration
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -38,11 +32,16 @@ nfm = Linear(dim=dim, kernel='fullrank').to(device)
 
 
 # Training config
-num_epochs = 800
-batch_size = 5000
+num_epochs = 1000
+batch_size =10
+
+# Number of forward evaluations = num_epochs*batch_size
+
+# Set observed data and uncertainty
 sigma = 0.01
 observed_data = torch.tensor([0.64704126, 0.61732611], device=device)
 
+# Define forward model
 simulator=simulator_full5
 
 loss_hist = np.array([])
@@ -57,16 +56,15 @@ for it in tqdm(range(num_epochs)):
     optimizer.zero_grad()
 
     z0 = torch.randn(batch_size, dim, device=device)
-    w, log_det_flow = nfm.forward_and_log_det(z0)      # (batch,5), (batch,)
+    w, log_det_flow = nfm.forward_and_log_det(z0)      
 
-    # apply our per-dimension constraints
+
     theta, log_det_trans = batch_constrained_transform(w)
 
-    log_det = log_det_flow + log_det_trans            # total Jacobian
+    log_det = log_det_flow + log_det_trans            
 
-    synthetic_value = simulator(theta)              # + ensure device consistency
+    synthetic_value = simulator(theta)              
 
-    # your usual log-p, log-q0, etc…
     log_p = -0.5 * (((synthetic_value - observed_data) / sigma) ** 2).sum(dim=1)
     log_q0 = -0.5 * torch.sum(z0**2, dim=1) - 0.5 * dim * math.log(2*math.pi)
     log_q  = log_q0 - log_det
@@ -92,29 +90,34 @@ plt.title("Training Loss for VI Normalising Flows")
 
 
 # Sampling and plotting
-z, _ = nfm.sample(num_samples=100000)   # z.shape = (N,5)
+z, _ = nfm.sample(num_samples=100000)  
 
 # bounds for Uniform dims 0–1
-u_lo, u_hi = 0.0, 11.0
+u_lo, u_hi = 0.0, 10.0
 
 # Gaussian params for dims 2,3,4
 gauss_means = [8.5, 0.37, 44.8]
 gauss_stds  = [0.3,  0.02, 0.8]
 
+# Map back to physical space
 theta_samples = unconstrained_to_constrained_5d(
     z, u_lo, u_hi,
     gauss_means, gauss_stds
 )
 
-print(theta_samples.shape)  # should be (2**20, 5)
+print(theta_samples.shape)  
 
 theta_samples=theta_samples.detach().cpu().numpy()
 
-save_path = "src/example/full/results/nf.png"
+save_path = "./src/example/full/results/nf_large_cbar_time"
 
+# Save the samples and plot
 
+np.save("./src/example/samples/full/nf_large_time.npy",theta_samples)
+truths = [4.0, 7.0, 8.5, 0.37, 44.8]
 
-np.save("src/example/samples/nf_samples.npy",theta_samples)
+plot_5d_corner(theta_samples, truths=truths,save_path=save_path)
 
+end_time = time.perf_counter()
 
-plot_5d_corner(theta_samples, save_path=save_path)
+print(f"Total runtime: {end_time - start_time:.2f} seconds")
