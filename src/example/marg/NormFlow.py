@@ -7,18 +7,20 @@ current_dir = os.path.dirname(__file__)
 src_path = os.path.abspath(os.path.join(current_dir, '../..'))
 sys.path.append(src_path)
 import math
+import matplotlib.pyplot as plt
 import normflows as nf
 from tqdm import tqdm
-from utilities.Gassmann import simulator_prob, simulator_det, sample_and_log_gaussians
+import numpy as np
+from utilities.Gassmann import simulator_prob, simulator_det, sample_nuis_parameters_cuda
 from utilities.NormFlows import *
-
-#from utils.TrainNormFlow import TrainNormFlow  # Adjust import paths as needed
 from utilities.Histogram2d import pairplot
-import os
-
 import matplotlib.pyplot as plt
+from utilities.Gassmann import simulator_prob, sample_and_log_gaussians  # Or simulator_det
+import time
 
-
+##########################################################################################################################
+##### Probabilistic version ####
+start_time = time.perf_counter()
 
 # Device configuration
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -33,10 +35,9 @@ nfm = Linear(dim=dim, kernel='fullrank').to(device)
 
 # Training config
 num_epochs = 2000
-batch_size = 50
+batch_size = 1000
 sigma = 0.01
 observed_data = torch.tensor([0.64704126, 0.61732611], device=device)
-
 simulator=simulator_prob
 
 loss_hist = np.array([])
@@ -58,7 +59,7 @@ for it in tqdm(range(num_epochs)):
 
     log_det = log_det_flow + log_det_trans
 
-    synthetic_value,n = simulator(theta.to(device))  # Ensure simulator returns device-correct outputs
+    synthetic_value,n = simulator(theta.to(device)) 
 
     log_p = -0.5 * (((synthetic_value - observed_data) / sigma) ** 2).sum()
 
@@ -85,7 +86,7 @@ plt.xlabel("Iterations")
 plt.ylabel("Loss")
 plt.title("Training Loss for VI Normalising Flows")
 
-save_path = "src/example/marg/results/nf_prob.png"
+save_path = "./src/example/marg/results/nf_prob_large_time.png"
 
 
 # Sampling and plotting
@@ -94,12 +95,16 @@ a, b = 0.0, 10.0   # or your actual domain bounds
 theta_samples = unconstrained_to_constrained(z, a, b)  # shape (N, dim)
 m_true = torch.tensor([4, 7])
 
-np.save("src/example/samples/nf_samples.npy",z.detach().cpu().numpy())
+np.save("./src/example/samples/marg/prob/nf_samples_prob_large_time.npy",theta_samples.detach().cpu().numpy())
 
 pairplot(theta_samples.detach().cpu().numpy(), m_true.detach().cpu().numpy(), fontsize=15, save_path=save_path)
+end_time = time.perf_counter()
+print(f"Total runtime: {end_time - start_time:.2f} seconds")
 
 ##########################################################################################################################
-
+##### Deterministic version ####
+import time
+start_time = time.perf_counter()
 
 # Device configuration
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -113,11 +118,11 @@ nfm = Linear(dim=dim, kernel='fullrank').to(device)
 
 
 # Training config
-num_epochs = 1000
-batch_size = 50
+num_epochs = 2000
+batch_size = 1000
 sigma = 0.01
 observed_data = torch.tensor([0.64704126, 0.61732611], device=device)
-#simulator = simulator_prob  # or simulator_det
+
 simulator=simulator_det
 
 loss_hist = np.array([])
@@ -132,14 +137,14 @@ for it in tqdm(range(num_epochs)):
     optimizer.zero_grad()
 
     z0 = torch.randn(batch_size, dim, device=device)
-    # 2. Flow forward: w, log_det_flow = nfm.forward_and_log_det(z0)
+
     w, log_det_flow = nfm.forward_and_log_det(z0)
 
     theta, log_det_trans = log_det_transform(w, low=0.0, high=10.0)
 
     log_det = log_det_flow + log_det_trans
 
-    synthetic_value = simulator(theta.to(device))  # Ensure simulator returns device-correct outputs
+    synthetic_value = simulator(theta.to(device))  
 
     log_p = -0.5 * (((synthetic_value - observed_data) / sigma) ** 2).sum()
 
@@ -165,7 +170,7 @@ plt.xlabel("Iterations")
 plt.ylabel("Loss")
 plt.title("Training Loss for VI Normalising Flows")
 
-save_path = "src/example/marg/results/nf_det.png"
+save_path = "./src/example/marg/results/nf_det_large_time.png"
 
 
 # Sampling and plotting
@@ -174,6 +179,9 @@ a, b = 0.0, 10.0   # or your actual domain bounds
 theta_samples = unconstrained_to_constrained(z, a, b)  # shape (N, dim)
 m_true = torch.tensor([4, 7])
 
-np.save("src/example/samples/nf_samples.npy",z.detach().cpu().numpy())
+np.save("./src/example/samples/marg/det/nf_samples_det_large_time.npy",theta_samples.detach().cpu().numpy())
 
 pairplot(theta_samples.detach().cpu().numpy(), m_true.detach().cpu().numpy(), fontsize=15, save_path=save_path)
+
+end_time = time.perf_counter()
+print(f"Total runtime: {end_time - start_time:.2f} seconds")
