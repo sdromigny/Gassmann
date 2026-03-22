@@ -5,7 +5,7 @@ from matplotlib.colors import LogNorm
 def pairplot(
     generated_data_2d,
     m_true,
-    fontsize=14,
+    fontsize=20,
     bins=50,
     figsize=(7, 7),
     cmap="viridis",
@@ -13,11 +13,18 @@ def pairplot(
     save_path=None
 ):
     """
-    2D histogram + detached marginals, but only showing bins & points
-    whose density > density_threshold.
+    2D histogram 
     """
+    plt.rcParams.update({
+    "font.family": "serif",
+    "font.size": fontsize,          
+    "axes.labelsize": fontsize,     
+    "xtick.labelsize": 20,   
+    "ytick.labelsize": 20,
+    })
     x = generated_data_2d[:, 0]
     y = generated_data_2d[:, 1]
+
 
     x_lo, x_hi = 0.0, 10.0
     y_lo, y_hi = 0.0, 10.0
@@ -39,14 +46,13 @@ def pairplot(
     y_hd = y[high_density]
 
 
-
     fig = plt.figure(figsize=figsize)
     gs = fig.add_gridspec(2, 2,
                           height_ratios=[1, 4],
                           width_ratios=[4, 1],
                           hspace=0.1, wspace=0.1)
 
-    # — Top marginal (x) —
+
     ax_x = fig.add_subplot(gs[0, 0])
     counts_x, edges_x = np.histogram(
         x_hd,
@@ -62,31 +68,42 @@ def pairplot(
     ax_x.axvline(m_true[0], color="red", linestyle="--")
     ax_x.set_xlim(x_lo, x_hi)
     ax_x.set_ylim(0, counts_x.max() * 1.05)
-    ax_x.set_ylabel("Density", fontsize=fontsize - 2)
-    ax_x.tick_params(axis="x", bottom=False, labelbottom=False)
-    ax_x.tick_params(axis="y", left=True, right=False, labelleft=True, labelsize=fontsize-4)
-    ax_x.spines['bottom'].set_visible(False)
+    ax_x.set_xticks([])
+    ax_x.set_yticks([])
+    ax_x.tick_params(bottom=False, top=False, left=False, right=False,
+                labelbottom=False, labeltop=False,
+                labelleft=False, labelright=False)
 
-    # — Main 2D histogram —
     ax_main = fig.add_subplot(gs[1, 0])
-    # use pcolormesh
+
     X, Y = np.meshgrid(x_edges, y_edges)
     pcm = ax_main.pcolormesh(
         X, Y, Z_masked.T,
         cmap=cmap,
-        norm=LogNorm(),
+        norm=LogNorm(vmin=Z[Z>0].min(), vmax=Z.max()),  
         shading="auto"
     )
 
-    ax_main.plot(m_true[0], m_true[1], 'ro', markersize=6)
+
+    vmin = 1e-7
+    vmax = 1e+1   
+
+    pcm = ax_main.pcolormesh(
+        X, Y, Z_masked.T,
+        cmap=cmap,
+        norm=LogNorm(vmin=vmin, vmax=vmax),
+        shading="auto"
+    )
+
+    ax_main.plot(m_true[0], m_true[1], 'ro', markersize=15,markeredgecolor='white', markeredgewidth=4, zorder=10)
     ax_main.set_xlim(x_lo, x_hi)
     ax_main.set_ylim(y_lo, y_hi)
-    ax_main.set_xlabel(r"$\rho_{\rm fluid,1}$", fontsize=fontsize)
-    ax_main.set_ylabel(r"$\rho_{\rm fluid,2}$", fontsize=fontsize)
-    ax_main.tick_params(axis="x", bottom=True, top=False, labelbottom=True, labelsize=fontsize-2)
-    ax_main.tick_params(axis="y", left=True, right=False, labelleft=True, labelsize=fontsize-2)
+    ax_main.set_xticks([])
+    ax_main.set_yticks([])
+    ax_main.tick_params(bottom=False, top=False, left=False, right=False,
+                labelbottom=False, labeltop=False,
+                labelleft=False, labelright=False)
 
-    # — Right marginal (y) —
     ax_y = fig.add_subplot(gs[1, 1])
     counts_y, edges_y = np.histogram(
         y_hd,
@@ -102,10 +119,11 @@ def pairplot(
     ax_y.axhline(m_true[1], color="red", linestyle="--")
     ax_y.set_ylim(y_lo, y_hi)
     ax_y.set_xlim(0, counts_y.max() * 1.05)
-    ax_y.set_xlabel("Density", fontsize=fontsize - 2)
-    ax_y.tick_params(axis="y", left=False, labelleft=False)
-    ax_y.tick_params(axis="x", bottom=True, top=False, labelbottom=True, labelsize=fontsize-4)
-    ax_y.spines['left'].set_visible(False)
+    ax_y.set_xticks([])
+    ax_y.set_yticks([])
+    ax_y.tick_params(bottom=False, top=False, left=False, right=False,
+                labelbottom=False, labeltop=False,
+                labelleft=False, labelright=False)
 
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
