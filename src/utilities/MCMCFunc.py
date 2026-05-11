@@ -16,8 +16,8 @@ import pints
 
 class MCSamplingGassmannDet(pints.LogPDF):
     def __init__(self, d_obs, sigma):
-        self._d_obs = torch.tensor(d_obs, dtype=torch.float32)  # Convert to torch tensor
-        self._sigma = torch.tensor(sigma, dtype=torch.float32)  # Convert to torch tensor
+        self._d_obs = torch.tensor(d_obs, dtype=torch.float32)  
+        self._sigma = torch.tensor(sigma, dtype=torch.float32)  
 
     def __call__(self, theta):
         return self.log_pdf(theta)
@@ -27,7 +27,7 @@ class MCSamplingGassmannDet(pints.LogPDF):
         theta_torch = torch.tensor(theta, dtype=torch.float32)
 
         # Simulate data using the torch-based simulator
-        d_pred = simulator_det(theta_torch)  # Output is a torch tensor
+        d_pred = simulator_det(theta_torch)  
 
         # Compute likelihood in torch
         likelihood = -0.5 * torch.sum(((self._d_obs - d_pred) / self._sigma) ** 2)
@@ -90,31 +90,12 @@ class FullMCMC(pints.LogPDF):
 
 
 class PseudoMarginalMCMCController:
-    """
-    PINTS-style controller for pseudo-marginal Metropolis-Hastings with K=1.
-    This mimics the minimal PINTS API:
-      - __init__(model, nchains, xs, method=...)
-      - set_max_iterations(n)
-      - run() -> returns chains shaped (nchains, niter, dim)
-
-    IMPORTANT:
-    - model must NOT be a stochastic pints.LogPDF. Instead pass a small dict-like object
-      providing:
-         - simulator_prob(theta_torch) -> (d_pred, n)   # n drawn from p(n)
-         - log_prior_theta(theta) -> float
-         - d_obs: numpy array of observations
-         - sigma: scalar or array for observation noise
-      (Later in the example I show how to wrap your existing functions.)
-    - This implementation uses a Gaussian random-walk proposal (symmetric).
-    - K = 1 (single nuisance draw). If you want K>1, you can modify to average and use logsumexp.
-    """
 
     def __init__(self, model, nchains, xs, method=None):
         """
         model: object providing simulator_prob, log_prior_theta, d_obs, sigma
         nchains: int
         xs: list of initial positions (length nchains) each an array-like of dimension d
-        method: ignored but kept for compatibility with pints API
         """
         self.model = model
         self.nchains = int(nchains)
@@ -183,7 +164,7 @@ class PseudoMarginalMCMCController:
         if simulator_prob is None or log_prior_theta is None or d_obs is None or sigma is None:
             raise ValueError("model must provide simulator_prob, log_prior_theta, d_obs, sigma")
 
-        # run each chain serially (you can parallelize externally)
+        # run each chain serially
         for c in range(self.nchains):
             t0 = time.time()
             theta_curr = self.xs[c].copy()
