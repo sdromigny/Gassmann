@@ -155,7 +155,7 @@ This project is licensed under the Apache‑2.0 License.
 
 ## Acknowledgements
 
-Sixtine Dromigny is funded by a UKRI NERC DTP Award (NE/S007474/1) and the Clarendon Scholarship (SR506). The author gratefully acknowledges their support. ChatGPT was used to comment the functions, to improve readability.
+Sixtine Dromigny is funded by a UKRI NERC DTP Award (NE/S007474/1) and the Clarendon Scholarship (SR506). The author gratefully acknowledges their support. OpenAI GPT-5 Edu model was used to add comments and refactor function to improve readability of the scripts.
 
 ---
 
