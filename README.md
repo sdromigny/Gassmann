@@ -155,7 +155,7 @@ This project is licensed under the Apache‑2.0 License.
 
 ## Acknowledgements
 
-Sixtine Dromigny is funded by a UKRI NERC DTP Award (NE/S007474/1) and the Clarendon Scholarship (SR506). The author gratefully acknowledges their support.
+Sixtine Dromigny is funded by a UKRI NERC DTP Award (NE/S007474/1) and the Clarendon Scholarship (SR506). The author gratefully acknowledges their support. ChatGPT was used to comment the functions, to improve readability.
 
 ---
 
