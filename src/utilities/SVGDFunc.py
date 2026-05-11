@@ -1,9 +1,7 @@
 import numpy as np
 import torch
 import torch.distributions.transforms as T
-# Make sure simulator_det is on the same device.
-# If it’s already defined to operate on torch.Tensor→torch.Tensor, great.
-# Otherwise wrap it into a function that returns a torch.Tensor on the correct device.
+
 import h5py
 import os
 from utilities.NormFlows import *
@@ -12,7 +10,7 @@ from utilities.NormFlows import *
 import numpy as np
 import torch
 from scipy.spatial.distance import pdist, squareform
-from utilities.Gassmann import *  # or simulator_prob, as appropriate
+from utilities.Gassmann import * 
 from typing import Tuple
 def lnprob_factory(forward_model, d_obs, sigma, device, prior=None):
     """
@@ -342,7 +340,6 @@ def svgd_grad(x, grad, kernel='rbf', w=None, h=1.0, chunks=None):
     # --- 1) compute weighted pairwise squared distances (condensed) in chunks ---
     dist_condensed = None  # will be length n*(n-1)/2
 
-    # Use chunking so we don't need to materialize x*sqrt(w) for all dims at once if d large
     chunk_width = chunks[1]
     for i in range(0, d, chunk_width):
         end = min(i + chunk_width, d)
@@ -369,13 +366,13 @@ def svgd_grad(x, grad, kernel='rbf', w=None, h=1.0, chunks=None):
     medh = np.sqrt(0.5 * medh / np.log(n + 1.0))
     h_actual = h * medh if h > 0 else medh
 
-    # --- 3) kernel matrix K (square form) ---
+    # --- 3) kernel matrix K ---
     # note: dist_condensed are squared distances
     K_cond = np.exp(-dist_condensed / (2.0 * (h_actual ** 2)))
     K = squareform(K_cond)     # (n,n)
     np.fill_diagonal(K, 1.0)
 
-    # --- 4) compute SVGD gradient (vectorized) ---
+    # --- 4) compute SVGD gradient ---
     # Term A: K @ grad  (n,d)
     A = K.dot(grad)            # (n, d)
 
@@ -455,22 +452,7 @@ class sSVGD():
                burn_in=100, thin=2, alpha=0.9, beta=0.95, chunks=None, optimizer=None):
         '''
         Using ssvgd to sample a probability density function
-        Input
-            x0: initial value, shape (n,dim)
-            n_iter: number of iterations
-            metropolis: If true, use metropolis-hastings adjust. This is more accurate, but usually requires very small
-                        stepsize, which means more computational cost
-            stepsize: stepsize for each iteration
-            gamma: decaying rate for stepsize
-            decay_step: the number of steps to decay the stepsize
-            burn_in: burn_in period
-            thin: thining of the chain
-            alpha, beta: hyperparameter for sgd and adam, for sgd only alpha is ued
-            chunks: chunks of theta for calculation, default theta.shape
-        Return
-            losses: loss value for each iterations, shape (n_iter,n)
-            The final particles are stored at the hdf5 file specified by self.out, so no return samples
-        '''
+
 
         # Check input
         if x0 is None :
